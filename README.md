@@ -22,16 +22,26 @@ cd /root/src
 
 You are now ready to execute code!
 
-## Julia Setup
 
-From inside the docker container
+## Running the example
 ```
-julia
-
-# Activate the environment
-] activate .
-
-# Install the packages
-] instantiate
+LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libcurl.so.4" julia sift.jl
 ```
+
+
+## OLD:
+
+
+# ## Julia Setup
+# 
+# From inside the docker container
+# ```
+# julia
+# 
+# # Activate the environment
+# ] activate .
+# 
+# # Install the packages
+# ] instantiate
+# ```
 
