@@ -1,0 +1,13 @@
+version: "3"
+
+services:
+  cv:
+    build: .
+    volumes:
+      - ./src:/root/src
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    environment:
+      - DISPLAY=$DISPLAY
+    tty: true
+    privileged: true
+    network_mode: "host"
