@@ -16,7 +16,10 @@ RUN apt-get install vim -y
 #RUN julia -e "using Pkg; Pkg.instantiate()"
 RUN julia -e "using Pkg; Pkg.add(\"PythonCall\")"
 
-# Needed for OpenCV to run (through PythonCall in Julia)
+# Needed for OpenCV to run (through PythonCall in Julia).
 ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libcurl.so.4"
+
+# Make a directory for output within the container.
+RUN mkdir out
 
 CMD "/bin/bash"

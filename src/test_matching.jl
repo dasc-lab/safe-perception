@@ -18,15 +18,15 @@ K = assemble_K_matrix(get_cal_params(cal_path)...)
 
 kp1, kp2, matches = get_matches(img1, img2, "orb")
 img3 = cv.drawMatches(img1,kp1,img2,kp2,matches[pyslice(10)],py.None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-cv.imwrite("orb_matches.jpg", img3)
+cv.imwrite("../out/orb_matches.jpg", img3)
 
 kp1, kp2, matches = get_matches(img1, img2, "sift")
 img3 = cv.drawMatches(img1,kp1,img2,kp2,matches[pyslice(10)],py.None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-cv.imwrite("sift_matches.jpg", img3)
+cv.imwrite("../out/sift_matches.jpg", img3)
 
 kp1, kp2, matches = get_matches(img1, img2, "akaze")
 img3 = cv.drawMatches(img1,kp1,img2,kp2,matches[pyslice(10)],py.None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-cv.imwrite("akaze_matches.jpg", img3)
+cv.imwrite("../out/akaze_matches.jpg", img3)
 
 # Get point cloud by reprojecting + depth info
 # Invalid returns will be represented as NaN
