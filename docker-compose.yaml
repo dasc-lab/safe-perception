@@ -5,6 +5,7 @@ services:
     build: .
     volumes:
       - ./src:/root/src
+      - ./datasets:/root/datasets
       - /tmp/.X11-unix:/tmp/.X11-unix
     environment:
       - DISPLAY=$DISPLAY
