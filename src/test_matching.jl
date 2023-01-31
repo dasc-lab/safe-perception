@@ -1,6 +1,10 @@
 include("ingest.jl")
 include("matching.jl")
 
+# NOTE: test requires downloading "plant_4" eth3d dataset.
+# To download, run:
+# python3 download_eth3d_slam_datasets.py
+
 # Read in images
 path1 = "../datasets/training/plant_4/rgb/4043.278005.png"
 path2 = "../datasets/training/plant_4/rgb/4043.425458.png"
