@@ -32,7 +32,10 @@ function get_matches(img1, img2, detector_type::String="orb")
         detector = cv.AKAZE_create()
         feature_norm = cv.NORM_HAMMING
     elseif detector_type == "surf"
-        # Note: SURF is patented and requires workarounds when building/installing OpenCV
+        # Note: SURF is patented and requires a special build flag / contrib opencv
+        detector = cv.SURF_create()
+        feature_norm = cv.NORM_L2
+    else
         return
     end
 
