@@ -31,8 +31,18 @@ test_match(img1, img2, "sift")
 test_match(img1, img2, "akaze")
 # test_match(img1, img2, "surf")  # Only if SURF is installed
 
+# Test 3D correspondences
+kp1, kp2, matches = get_matches(img1, img2, "orb")
 # Get point cloud by reprojecting + depth info
 # Invalid returns will be represented as NaN
-points1 = cv.rgbd.depthTo3d(np.uint16(depth2), np.array(K))
-points2 = cv.rgbd.depthTo3d(np.uint16(depth2), np.array(K))
+# Assemple in numpy and convert to Julia. Not sure if optimal.
+in_points1 = np.column_stack([kp.pt for kp in kp1]).T  
+in_points1 = pyconvert(Matrix{Float64}, in_points1)
+in_points2 = np.column_stack([kp.pt for kp in kp2]).T
+in_points2 = pyconvert(Matrix{Float64}, in_points2)
+depth1 = pyconvert(Matrix{UInt8}, depth1)  # Can we just read these in as Julia matrices?
+depth2 = pyconvert(Matrix{UInt8}, depth2)
 # Get 3D points for each keypoint in each frame
+points1_3d = get_points_3d(K, in_points1, depth1)
+points2_3d = get_points_3d(K, in_points2, depth2)
+# Visualize

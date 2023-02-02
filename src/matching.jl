@@ -12,7 +12,7 @@ function get_matches(img1, img2, detector_type::String="orb")
     """
     Get matches between two images.
 
-    Arguments
+    Args:
         img1: first image
         img2: second image 
         detector_type: "orb", "sift", or "akaze"
@@ -53,3 +53,41 @@ function get_matches(img1, img2, detector_type::String="orb")
 
     return kp1, kp2, matches
 end
+
+function get_point_3d(K_inv::Matrix{Float64}, point::Vector, depth)
+    """
+    Takes a point in u,v and returns a point in x, y, z using the inverse
+    camera intrinsics matrix and the known depth (z) of the point.
+
+    Args:
+        K_inv: inverse camera intrinsics matrix
+        point: in image frame
+        depth: depth associated with the given pixel
+    """
+    point_3d = K_inv * [point; 1] * depth
+    return point_3d
+end
+
+function get_points_3d(K, points, depth_map)
+    """
+    Converts a list of points in the image frame to a 3d point cloud.
+
+    Args:
+        K: camera intrinsics matrix
+        points: n x 2 array of points [u, v] to reproject
+        depth_map: depth map for entire image
+    """
+    K_inv = inv(K)
+    n_pts = size(points, 1)
+    out_points = zeros(n_pts, 3)
+    for i in 1:n_pts
+        point = points[i, :]
+        # Round for indexing into the depth map. Note that keypoints are Float64,
+        # even though the image is composed of discrete pixels. Not sure if this
+        # is the best way to reproject given the limitations of the depth map.
+        u_ind, v_ind = round.(Int, point)
+        out_points[i, :] = get_point_3d(K_inv, point, depth_map[v_ind, u_ind])  # TODO(rgg): check this indexing is correct
+    end
+    return out_points
+end
+
