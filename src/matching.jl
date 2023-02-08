@@ -3,6 +3,7 @@ ENV["JULIA_CONDAPKG_BACKEND"] = "Null"
 ENV["JULIA_PYTHONCALL_EXE"] = "/usr/bin/python3"
 
 using PythonCall, GeometryBasics, LinearAlgebra
+using ColorTypes, MeshCat
 
 cv = pyimport("cv2")
 np = pyimport("numpy")
