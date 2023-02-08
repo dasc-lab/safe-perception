@@ -1,8 +1,10 @@
 include("ingest.jl")
 include("matching.jl")
 using GeometryBasics, ColorTypes, CoordinateTransformations, MeshCat, LinearAlgebra
-vis = Visualizer()  # Only need to set up once
-delete!(vis)
+if !@isdefined vis
+    vis = Visualizer()  # Only need to set up once
+end
+delete!(vis)  # Clear any rendered objects
 
 # NOTE: test requires downloading "plant_4" eth3d dataset.
 # To download, run:
@@ -41,20 +43,23 @@ kp1, kp2, matches = get_matches(img1, img2, "orb")
 # Get point cloud by reprojecting + depth info
 # Invalid returns will be represented as zeros (projected to origin)
 # Assemple in numpy and convert to Julia. Not sure if optimal.
-points1 = np.column_stack([kp.pt for kp in kp1]).T  
-points1 = pyconvert(Matrix{Float64}, points1)
-points2 = np.column_stack([kp.pt for kp in kp2]).T
-points2 = pyconvert(Matrix{Float64}, points2)
+kpoints1 = np.column_stack([kp.pt for kp in kp1]) 
+kpoints1 = pyconvert(Matrix{Float64}, kpoints1)
+
+kpoints2 = np.column_stack([kp.pt for kp in kp2])
+kpoints2 = pyconvert(Matrix{Float64}, kpoints2)
+
 # Can we just read these in as Julia matrices?
 depth1 = pyconvert(Matrix{UInt16}, depth1) ./ 5000  # Divide by 5000 for eth3d dataset
 depth2 = pyconvert(Matrix{UInt16}, depth2) ./ 5000
+
 # Get 3D points for each keypoint in each frame
-points1_3d = get_points_3d(K, points1, depth1)
-points2_3d = get_points_3d(K, points2, depth2)
+points1_3d = get_points_3d(K, kpoints1, depth1)
+points2_3d = get_points_3d(K, kpoints2, depth2)
 # Visualize correspondences
 for m in matches
-    show_correspondence(vis, m)
+    show_correspondence!(vis, m, kpoints1, kpoints2, img1_color, img2_color, points1_3d, points2_3d)
 end
 # Visualize entire point cloud in frame 1
 points1_full_3d = get_points_3d(K, depth1)
-show_pointcloud_color(vis, depth1, img1_color, K)
+show_pointcloud_color!(vis, depth1, img1_color, K)

@@ -76,22 +76,24 @@ function get_points_3d(K, points, depth_map)
 
     Args:
         K: camera intrinsics matrix
-        points: n x 2 array of points [u, v] to reproject
+        points: 2 x n array of points [u; v] to reproject
         depth_map: depth map for entire image
     Returns:
         Vector{Point3f}
     """
     K_inv = inv(K)
-    n_pts = size(points, 1)
+    n_pts = size(points, 2)
     out_points = Point3f[]
     for i in 1:n_pts
-        point = points[i, :]
+        point = points[:, i]
         # Round for indexing into the depth map. Note that keypoints are Float64,
         # even though the image is composed of discrete pixels. Not sure if this
         # is the best way to reproject given the limitations of the depth map.
         u_ind, v_ind = round.(Int, point)
-        push!(out_points, get_point_3d(K_inv, point, depth_map[v_ind, u_ind])) # TODO(rgg): check this indexing is correct
-        # TODO(rgg): discard invalid returns?
+        pt_3d = get_point_3d(K_inv, point, depth_map[v_ind, u_ind])
+        # Some will be projected to the origin (invalid depth)
+        # We keep these in the output to match the input
+        push!(out_points, pt_3d)
     end
     return out_points
 end
@@ -101,9 +103,9 @@ function get_points_3d(K, depth_map)
     out_points = Point3f[]
     c_inds = CartesianIndices(depth_map)
     for i in c_inds
-        pt3d = get_point_3d(K_inv, Tuple(i), depth_map[i])
-        # Invalid returns will be exactly at the origin
-        if norm(pt3d) > eps()
+        pt_3d = get_point_3d(K_inv, Tuple(i), depth_map[i])
+        # Invalid returns will be exactly at the origin, remove
+        if norm(pt_3d) > eps()
             push!(out_points, pt3d)
         end
     end
@@ -128,12 +130,17 @@ function get_point_color(point, color_img)
 end
 
 line_material = LineBasicMaterial(color=RGB(0, 0, 1), linewidth=2.0)
-d_thresh = 0.0001  # Distance threshold below which two points will be considered the same
-function show_correspondence(vis::Visualizer, match)
+function show_correspondence!(vis::Visualizer, match, kpoints1, kpoints2, img1_color, img2_color, points1_3d, points2_3d)
     """
     Args:
         vis: a MeshCat Visualizer
         match: an opencv DMatch (through PythonCall)
+        kpoints1: 2xN keypoints in [u, v] for image 1
+        kpoints2: 2xN keypoints in [u, v] for image 2
+        img1_color: RGB image 1
+        img2_color: RGB image 2
+        points1_3d: 3d keypoints for image 1
+        points2_3d: 3d keypoints for image 2
     """
     # Extract the keypoints and adjust 0-indexing to 1-indexing
     idx1 = pyconvert(Int32, match.queryIdx)+1
@@ -142,22 +149,19 @@ function show_correspondence(vis::Visualizer, match)
     pt2 = points2_3d[idx2]
     line = [pt1, pt2]
     # Plot correspondence
-    # Correspondences that are valid on 2d image but do not have depth info will be projected to origin
-    if norm(pt1) > d_thresh && norm(pt2) > d_thresh
-        c1 = get_point_color(points1[idx1, :], img1_color)
-        c2 = get_point_color(points2[idx2, :], img2_color)
-        m1 = MeshLambertMaterial(color=c1)
-        m2 = MeshLambertMaterial(color=c2)
-        # Plot points
-        setobject!(vis["pc1"][string(idx1)], Sphere(pt1, 0.001), m1)
-        setobject!(vis["pc2"][string(idx2)], Sphere(pt2, 0.001), m2)
-        # Connect with line
-        line_str = "corrs" * string(idx1) * "_" * string(idx2)
-        setobject!(vis["lines"][line_str], Object(PointCloud(line), line_material, "Line"))
-    end
+    c1 = get_point_color(kpoints1[:, idx1], img1_color)
+    c2 = get_point_color(kpoints2[:, idx2], img2_color)
+    m1 = MeshLambertMaterial(color=c1)
+    m2 = MeshLambertMaterial(color=c2)
+    # Plot points
+    setobject!(vis["pc1"][string(idx1)], Sphere(pt1, 0.001), m1)
+    setobject!(vis["pc2"][string(idx2)], Sphere(pt2, 0.001), m2)
+    # Connect with line
+    line_str = "corrs" * string(idx1) * "_" * string(idx2)
+    setobject!(vis["lines"][line_str], Object(PointCloud(line), line_material, "Line"))
 end
 
-function show_pointcloud_color(vis, depth_map, img_color, K)
+function show_pointcloud_color!(vis, depth_map, img_color, K)
     colors = Colorant[]
     points = Point3f[]
     K_inv = inv(K)
@@ -178,4 +182,21 @@ function show_pointcloud_color(vis, depth_map, img_color, K)
     pc = PointCloud(points, colors)
     print("Plotting point cloud\n")
     setobject!(vis["pc"], pc)
+end
+
+function remove_invalid_returns(kp, p)
+    """
+    Takes in a list of keypoints in u, v and corresponding 3D points.
+    Removes all 2D, 3D pairs where the 3D point is at the origin.
+    """
+    n_pts = size(kp, 2)
+    clean_inds = Int32[]
+    # TODO(rgg): cleaner way with mapslices or similar?
+    for i in 1:n_pts
+        pt = p[:, i]
+        if norm(pt) > eps()
+            push!(clean_inds, i)
+        end
+    end 
+    return (kp[:, clean_inds], p[:, clean_inds])
 end

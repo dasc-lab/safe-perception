@@ -243,8 +243,8 @@ end
     c̄
     max_iterations = 1000
     μ_factor = 1.4
-    verbose=false
-    rtol=1e-6
+    verbose = false
+    rtol = 1e-6
 end
 GM(c, kwargs...) = GM(c̄=c; kwargs...)
 
@@ -252,10 +252,10 @@ GM(c, kwargs...) = GM(c̄=c; kwargs...)
     c̄
     max_iterations = 1000
     μ_factor = 1.4
-    rtol=1e-6
+    rtol = 1e-6
     verbose = false
 end
-TLS(c) = TLS(c̄=c)
+TLS(c) = TLS(c̄ = c)
 
 
 function wls_solver_R(w, data)
