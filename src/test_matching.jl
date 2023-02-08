@@ -1,5 +1,8 @@
 include("ingest.jl")
 include("matching.jl")
+using GeometryBasics, ColorTypes, CoordinateTransformations, MeshCat, LinearAlgebra
+vis = Visualizer()  # Only need to set up once
+delete!(vis)
 
 # NOTE: test requires downloading "plant_4" eth3d dataset.
 # To download, run:
@@ -8,19 +11,21 @@ include("matching.jl")
 function test_match(img1, img2, feature_string::String)
     kp1, kp2, matches = get_matches(img1, img2, feature_string)
     img3 = cv.drawMatches(img1,kp1,img2,kp2,matches[pyslice(10)],py.None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-    cv.imwrite("/root/out/" * feature_string * "_matches.jpg", img3)
+    cv.imwrite("/root/src/" * feature_string * "_matches.jpg", img3)
 end
 
 # Read in images
 path1 = "/root/datasets/training/plant_4/rgb/4043.278005.png"
-path2 = "/root/datasets/training/plant_4/rgb/4043.425458.png"
+path2 = "/root/datasets/training/plant_4/rgb/4043.314868.png"
 depth_path1 = "/root/datasets/training/plant_4/depth/4043.278005.png"
-depth_path2 = "/root/datasets/training/plant_4/depth/4043.425458.png"
+depth_path2 = "/root/datasets/training/plant_4/depth/4043.314868.png"
 
-img1 = cv.imread(path1, cv.IMREAD_GRAYSCALE) 
-img2 = cv.imread(path2, cv.IMREAD_GRAYSCALE) 
-depth1 = cv.imread(depth_path1, cv.IMREAD_GRAYSCALE) 
-depth2 = cv.imread(depth_path2, cv.IMREAD_GRAYSCALE) 
+img1_color = cv.imread(path1, cv.IMREAD_COLOR) 
+img2_color = cv.imread(path2, cv.IMREAD_COLOR)
+img1 = cv.cvtColor(img1_color, cv.COLOR_BGR2GRAY)
+img2 = cv.cvtColor(img2_color, cv.COLOR_BGR2GRAY)
+depth1 = cv.imread(depth_path1, cv.IMREAD_ANYDEPTH) 
+depth2 = cv.imread(depth_path2, cv.IMREAD_ANYDEPTH) 
 
 # Read in camera intrinsics matrix
 cal_path = "/root/datasets/training/plant_4/calibration.txt"
@@ -34,15 +39,22 @@ test_match(img1, img2, "akaze")
 # Test 3D correspondences
 kp1, kp2, matches = get_matches(img1, img2, "orb")
 # Get point cloud by reprojecting + depth info
-# Invalid returns will be represented as NaN
+# Invalid returns will be represented as zeros (projected to origin)
 # Assemple in numpy and convert to Julia. Not sure if optimal.
-in_points1 = np.column_stack([kp.pt for kp in kp1]).T  
-in_points1 = pyconvert(Matrix{Float64}, in_points1)
-in_points2 = np.column_stack([kp.pt for kp in kp2]).T
-in_points2 = pyconvert(Matrix{Float64}, in_points2)
-depth1 = pyconvert(Matrix{UInt8}, depth1)  # Can we just read these in as Julia matrices?
-depth2 = pyconvert(Matrix{UInt8}, depth2)
+points1 = np.column_stack([kp.pt for kp in kp1]).T  
+points1 = pyconvert(Matrix{Float64}, points1)
+points2 = np.column_stack([kp.pt for kp in kp2]).T
+points2 = pyconvert(Matrix{Float64}, points2)
+# Can we just read these in as Julia matrices?
+depth1 = pyconvert(Matrix{UInt16}, depth1) ./ 5000  # Divide by 5000 for eth3d dataset
+depth2 = pyconvert(Matrix{UInt16}, depth2) ./ 5000
 # Get 3D points for each keypoint in each frame
-points1_3d = get_points_3d(K, in_points1, depth1)
-points2_3d = get_points_3d(K, in_points2, depth2)
-# Visualize
+points1_3d = get_points_3d(K, points1, depth1)
+points2_3d = get_points_3d(K, points2, depth2)
+# Visualize correspondences
+for m in matches
+    show_correspondence(vis, m)
+end
+# Visualize entire point cloud in frame 1
+points1_full_3d = get_points_3d(K, depth1)
+show_pointcloud_color(vis, depth1, img1_color, K)
