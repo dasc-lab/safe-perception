@@ -3,8 +3,6 @@ module PoseEstimation
 using LinearAlgebra, StaticArrays, GraduatedNonConvexity, Parameters
 using Random, Rotations 
 
-# all quaternions are 
-
 SV3{F} = SVector{3,F}
 SV4{F} = SVector{4,F}
 Quaternion{F} = SVector{4,F}

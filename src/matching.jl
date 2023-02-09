@@ -184,19 +184,21 @@ function show_pointcloud_color!(vis, depth_map, img_color, K)
     setobject!(vis["pc"], pc)
 end
 
-function remove_invalid_returns(kp, p)
+function remove_invalid_matches(p1, p2)
     """
-    Takes in a list of keypoints in u, v and corresponding 3D points.
-    Removes all 2D, 3D pairs where the 3D point is at the origin.
+    Takes in two matching 3xN matrices of 3D point correspondences. 
+    Removes all matching pairs where at least one point is at the origin.
+    Points at the origin are indicative of invalid depth returns.
     """
-    n_pts = size(kp, 2)
-    clean_inds = Int32[]
+    n_pts = size(p1, 2)
+    valid_inds = Int32[]
     # TODO(rgg): cleaner way with mapslices or similar?
     for i in 1:n_pts
-        pt = p[:, i]
-        if norm(pt) > eps()
-            push!(clean_inds, i)
+        pt1 = p1[:, i]
+        pt2 = p2[:, i]
+        if norm(pt1) > eps() && norm(pt2) > eps()
+            push!(valid_inds, i)
         end
     end 
-    return (kp[:, clean_inds], p[:, clean_inds])
+    return (p1[:, valid_inds], p2[:, valid_inds])
 end
