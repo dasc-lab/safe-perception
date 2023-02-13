@@ -124,7 +124,7 @@ matched_pts1, matched_pts2 = remove_invalid_matches(matched_pts1, matched_pts2)
 # Synthetic data
 function generate_synthetic_data()
     Random.seed!(42);
-    N = 1_000 # number of correspondences
+    N = 50 # number of correspondences
     p1 = randn(3, N)
     # generate a ground-truth pose
     R_groundtruth = rand(RotMatrix{3})
@@ -139,7 +139,7 @@ function generate_synthetic_data()
         p2_noisy[:, i] += β*(2*rand(3).-1)
     end
     # add outliers to some% of data
-    inds = [i for i=2:N if rand() < 0.70]
+    inds = [i for i=2:N if rand() < 0.10]
     for i=inds
         p2_noisy[:, i] += 3*randn(3)
     end
@@ -168,4 +168,27 @@ c̄ = 0.07  # Maximum residual of inliers
 
 # TODO(rgg): visualize groundtruth rotation for sanity check, visualize computed alignment as well.
 # Apply rototranslation to frame 1 3d keypoints
-# Visualize frame 2 3d keypoints; both should match
+function apply_Rt(pts, R, t)
+    """
+    Applies rototranslation to 3D points.
+    Args:
+        pts: 3xN xyz points
+        R: 3x3 rotation matrix
+        t: 3x1 translation vector
+    """
+    Rt = [R t; 0 0 0 1]  # Augmented rototranslation matrix
+    out = zeros(size(pts))
+    N = size(pts, 2)
+    pts_aug = [pts; ones(1, N)]
+    for i in 1:N
+        rot_pt_aug = Rt*pts_aug[:, i]
+        out[:, i] = rot_pt_aug[1:3]
+    end
+    return out
+end
+
+matched_pts1_rotated_tls = apply_Rt(matched_pts1, R_tls, t_tls)
+matched_pts1_rotated_gt = apply_Rt(matched_pts1, R_gt, t_gt)
+# Visualize with frame 2 3d keypoints; both should match
+show_correspondence!(vis, matched_pts2, matched_pts1_rotated_gt, "gt")
+show_correspondence!(vis, matched_pts2, matched_pts1_rotated_tls, "tls")

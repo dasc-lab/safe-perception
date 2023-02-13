@@ -106,7 +106,7 @@ function get_points_3d(K, depth_map)
         pt_3d = get_point_3d(K_inv, Tuple(i), depth_map[i])
         # Invalid returns will be exactly at the origin, remove
         if norm(pt_3d) > eps()
-            push!(out_points, pt3d)
+            push!(out_points, pt_3d)
         end
     end
     return out_points
@@ -147,6 +147,11 @@ function show_correspondence!(vis::Visualizer, match, kpoints1, kpoints2, img1_c
     idx2 = pyconvert(Int32, match.trainIdx)+1
     pt1 = points1_3d[idx1]
     pt2 = points2_3d[idx2]
+    # Check for correspondences to origin and skip
+    if norm(pt1) < eps() || norm(pt2) < eps()
+        return
+    end
+
     line = [pt1, pt2]
     # Plot correspondence
     c1 = get_point_color(kpoints1[:, idx1], img1_color)
@@ -159,6 +164,40 @@ function show_correspondence!(vis::Visualizer, match, kpoints1, kpoints2, img1_c
     # Connect with line
     line_str = "corrs" * string(idx1) * "_" * string(idx2)
     setobject!(vis["lines"][line_str], Object(PointCloud(line), line_material, "Line"))
+end
+
+function show_correspondence!(vis::Visualizer, kpoints1, kpoints2, label="default")
+    """
+    Shows all correspondences in matches lists of 3d keypoints.
+    Args:
+        vis: a MeshCat Visualizer
+        kpoints1: 3xN keypoints for image 1, columns aligned with kpoints2
+        kpoints2: 3xN keypoints for image 2, columns aligned with kpoints1
+    """
+    # Extract the keypoints and adjust 0-indexing to 1-indexing
+    N = size(kpoints1, 2)
+    for i = 1:N
+        pt1 = Point3f(kpoints1[:, i])
+        pt2 = Point3f(kpoints2[:, i])
+        # Do not check if correspondences are to origin, should be removed with remove_invalid_matches for this application
+        line = [pt1, pt2]
+        # TODO(recover color from original image?)
+        c1 = RGB(0, 0, 1)
+        if label == "gt"
+            c2 = RGB(0, 1, 0)
+        else
+            c2 = RGB(1, 1, 0)
+        end
+        # Plot correspondence
+        m1 = MeshLambertMaterial(color=c1)
+        m2 = MeshLambertMaterial(color=c2)
+        # Plot points
+        setobject!(vis["pc1_"*label][string(i)], Sphere(pt1, 0.001), m1)
+        setobject!(vis["pc2_"*label][string(i)], Sphere(pt2, 0.001), m2)
+        # Connect with line
+        line_str = "corrs_" * label * "_" * string(i) * "_" * string(i)
+        setobject!(vis["lines"][line_str], Object(PointCloud(line), line_material, "Line"))
+    end
 end
 
 function show_pointcloud_color!(vis, depth_map, img_color, K)
