@@ -81,7 +81,10 @@ depth2 = pyconvert(Matrix{UInt16}, depth2) ./ 5000
 
 # Read in groundtruth
 # Columns: timestamp tx ty tz qx qy qz qw
-gtruth = readdlm(path, ' ', Float64, skipstart=1)
+gt_path = "/root/datasets/training/plant_4/groundtruth.txt"
+gtruth = readdlm(gt_path, ' ', Float64, skipstart=1)
+# Get ground truth by interpolating
+R_gt, t_gt = get_groundtruth_Rt(gtruth, t1, t2)
 
 # Read in camera intrinsics matrix
 cal_path = "/root/datasets/training/plant_4/calibration.txt"
@@ -118,6 +121,34 @@ end
 # Finally, clean correspondence list of any pairs that contain either point at the origin (invalid depth)
 matched_pts1, matched_pts2 = remove_invalid_matches(matched_pts1, matched_pts2)
 
+# Synthetic data
+function generate_synthetic_data()
+    Random.seed!(42);
+    N = 1_000 # number of correspondences
+    p1 = randn(3, N)
+    # generate a ground-truth pose
+    R_groundtruth = rand(RotMatrix{3})
+    # generate a ground-truth translation
+    t_groundtruth = randn(3)
+    # generate true p2
+    p2 = R_groundtruth * p1  .+ t_groundtruth
+    # make noisy measurements
+    β = 0.01
+    p2_noisy = copy(p2)
+    for i=1:N
+        p2_noisy[:, i] += β*(2*rand(3).-1)
+    end
+    # add outliers to some% of data
+    inds = [i for i=2:N if rand() < 0.70]
+    for i=inds
+        p2_noisy[:, i] += 3*randn(3)
+    end
+    return p1, p2_noisy, R_groundtruth, t_groundtruth
+end
+# Uncomment to use synthetic data
+#matched_pts1, matched_pts2, R_gt, t_gt = generate_synthetic_data()
+
+
 # Compute R, t using TLS
 c̄ = 0.07  # Maximum residual of inliers
 @time R_tls, t_tls = PE.estimate_Rt(matched_pts1, matched_pts2;
@@ -125,8 +156,6 @@ c̄ = 0.07  # Maximum residual of inliers
     method_R=PE.TLS(c̄), # TODO: fix c̄, put in the theoretically correct value based on β
     method_t=PE.TLS(c̄)
 )
-# Get ground truth by interpolating
-R_gt, t_gt = get_groundtruth_Rt(gtruth, t1, t2)
 
 @show R_tls
 @show t_tls
@@ -134,5 +163,9 @@ R_gt, t_gt = get_groundtruth_Rt(gtruth, t1, t2)
 @show t_gt
 
 # Errors should be low
-@show norm(R_tls - R_gt)
+@show norm(R_tls - R_gt) * 180 / π
 @show norm(t_tls - t_gt)
+
+# TODO(rgg): visualize groundtruth rotation for sanity check, visualize computed alignment as well.
+# Apply rototranslation to frame 1 3d keypoints
+# Visualize frame 2 3d keypoints; both should match
