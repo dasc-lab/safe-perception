@@ -224,7 +224,7 @@ function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t
     for v in 1:v_max
         for u in 1:u_max
             c = get_point_color([u; v], img_color)
-            pt3d = R*get_point_3d(K_inv, [u; v], depth_map[v, u])+t
+            pt3d = (R*get_point_3d(K_inv, [u; v], depth_map[v, u])) + t
             # Invalid returns will be exactly at the origin
             if norm(pt3d) > eps()
                 push!(points, pt3d)
