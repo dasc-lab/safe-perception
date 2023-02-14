@@ -61,5 +61,4 @@ for m in matches
     show_correspondence!(vis, m, kpoints1, kpoints2, img1_color, img2_color, points1_3d, points2_3d)
 end
 # Visualize entire point cloud in frame 1
-points1_full_3d = get_points_3d(K, depth1)
 show_pointcloud_color!(vis, depth1, img1_color, K)

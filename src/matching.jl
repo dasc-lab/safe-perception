@@ -4,6 +4,7 @@ ENV["JULIA_PYTHONCALL_EXE"] = "/usr/bin/python3"
 
 using PythonCall, GeometryBasics, LinearAlgebra
 using ColorTypes, MeshCat
+using UUIDs
 
 cv = pyimport("cv2")
 np = pyimport("numpy")
@@ -64,7 +65,7 @@ function get_point_3d(K_inv::Matrix{Float64}, point, depth)
         K_inv: inverse camera intrinsics matrix
         point: in image frame
         depth: depth associated with the given pixel
-    Returns: Point3f
+    Returns: Point3f from GeometryBasics
     """
     point_3d = K_inv * [point...; 1] * depth
     return Point3f(point_3d)
@@ -103,7 +104,8 @@ function get_points_3d(K, depth_map)
     out_points = Point3f[]
     c_inds = CartesianIndices(depth_map)
     for i in c_inds
-        pt_3d = get_point_3d(K_inv, Tuple(i), depth_map[i])
+        v, u = Tuple(i)  # u, v map to x, y; but indexing is [y][x]
+        pt_3d = get_point_3d(K_inv, (u, v), depth_map[i])
         # Invalid returns will be exactly at the origin, remove
         if norm(pt_3d) > eps()
             push!(out_points, pt_3d)
@@ -166,7 +168,7 @@ function show_correspondence!(vis::Visualizer, match, kpoints1, kpoints2, img1_c
     setobject!(vis["lines"][line_str], Object(PointCloud(line), line_material, "Line"))
 end
 
-function show_correspondence!(vis::Visualizer, kpoints1, kpoints2, label="default")
+function show_correspondence!(vis::Visualizer, kpoints1, kpoints2, label=string(uuid1()))
     """
     Shows all correspondences in matches lists of 3d keypoints.
     Args:
@@ -185,6 +187,8 @@ function show_correspondence!(vis::Visualizer, kpoints1, kpoints2, label="defaul
         c1 = RGB(0, 0, 1)
         if label == "gt"
             c2 = RGB(0, 1, 0)
+        elseif label == "invalid"
+            c2 = RGB(1, 0, 0)
         else
             c2 = RGB(1, 1, 0)
         end
@@ -200,7 +204,18 @@ function show_correspondence!(vis::Visualizer, kpoints1, kpoints2, label="defaul
     end
 end
 
-function show_pointcloud_color!(vis, depth_map, img_color, K)
+# TODO(rgg): use multiple dispatch to clean this up
+function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t=zeros(3), label::String=string(uuid1()))
+    """
+    Args:
+        vis: MeshCat Visualizer
+        depth_map: 2D indexable e.g. Matrix{Float64}
+        img_color: 2D indexable of Colorant
+        K: camera matrix
+        R: [optional] rotation matrix to apply to every point
+        t: [optional] translation to apply to every point
+        label: [optional] unique identifier for pointcloud in MeshCat tree
+    """
     colors = Colorant[]
     points = Point3f[]
     K_inv = inv(K)
@@ -209,20 +224,20 @@ function show_pointcloud_color!(vis, depth_map, img_color, K)
     for v in 1:v_max
         for u in 1:u_max
             c = get_point_color([u; v], img_color)
-            pt3d = get_point_3d(K_inv, [u; v], depth_map[v, u])
+            pt3d = R*get_point_3d(K_inv, [u; v], depth_map[v, u])+t
             # Invalid returns will be exactly at the origin
             if norm(pt3d) > eps()
                 push!(points, pt3d)
-                #push!(points, Point3f([u; v; 0] ./ 600))
                 push!(colors, c)
             end
         end
     end
     pc = PointCloud(points, colors)
     print("Plotting point cloud\n")
-    setobject!(vis["pc"], pc)
+    # Need a unique name for each object or they will overwrite each other
+    setobject!(vis["pc"][label], pc)  
+    return label
 end
-
 function remove_invalid_matches(p1, p2)
     """
     Takes in two matching 3xN matrices of 3D point correspondences. 
@@ -240,4 +255,23 @@ function remove_invalid_matches(p1, p2)
         end
     end 
     return (p1[:, valid_inds], p2[:, valid_inds])
+end
+
+# Apply rototranslation to frame 1 3d keypoints
+function apply_Rt(pts, R, t)
+    """
+    Applies rototranslation to 3D points.
+    Args:
+        pts: 3xN xyz points
+        R: 3x3 rotation matrix
+        t: 3x1 translation vector
+    """
+    Rt = [R t; 0 0 0 1]  # Augmented rototranslation matrix
+    out = zeros(size(pts))
+    N = size(pts, 2)
+    pts_aug = [pts; ones(1, N)]
+    for (i, col) in enumerate(eachcol(pts_aug))
+        out[:, i] = (Rt*col)[1:3]
+    end
+    return out
 end
