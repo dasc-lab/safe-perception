@@ -5,7 +5,7 @@ using Random, Rotations
 
 SV3{F} = SVector{3,F}
 SV4{F} = SVector{4,F}
-Quaternion{F} = SVector{4,F}
+Quaternion{F} = SVector{4,F}  # x y z w
 
 function rotdist(R1, R2)
     s = (tr(R1 * R2') - 1) / 2 
