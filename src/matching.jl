@@ -132,6 +132,7 @@ function get_point_color(point, color_img)
 end
 
 line_material = LineBasicMaterial(color=RGB(0, 0, 1), linewidth=2.0)
+
 function show_correspondence!(vis::Visualizer, match, kpoints1, kpoints2, img1_color, img2_color, points1_3d, points2_3d)
     """
     Args:
@@ -272,6 +273,22 @@ function apply_Rt(pts, R, t)
     pts_aug = [pts; ones(1, N)]
     for (i, col) in enumerate(eachcol(pts_aug))
         out[:, i] = (Rt*col)[1:3]
+    end
+    return out
+end
+
+function apply_T(pts, T)
+    """
+    Applies rototranslation to 3D points.
+    Args:
+        pts: 3xN xyz points
+        T: 4x4 homogeneous transformation matrix
+    """
+    out = zeros(size(pts))
+    N = size(pts, 2)
+    pts_aug = [pts; ones(1, N)]
+    for (i, col) in enumerate(eachcol(pts_aug))
+        out[:, i] = (T*col)[1:3]
     end
     return out
 end

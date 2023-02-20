@@ -44,11 +44,14 @@ function get_groundtruth_Rt(gtruth, time1, time2)
     t2 = second[2:4]
     # Compute relative rotation and convert to rotation matrix
     # Note that (q2*q1')*q1 = q2 => (q2*q1') represents rotation from 1 to 2
-    q = PE.quatprod(q2, PE.quatinv(q1))
-    R = PE.quat_to_rot(q)
-    # Compute relative translation
-    t = t2-t1
-    return R, t
+    # q = PE.quatprod(q2, PE.quatinv(q1))
+
+    # Convention for ground truth is R, t go from frame 2 to world frame
+    Rt1_w = [PE.quat_to_rot(q1) t1; 0 0 0 1]
+    Rt2_w = [PE.quat_to_rot(q2) t2; 0 0 0 1]
+    # take point to w frame from frame 1, then go from w from to frame 2
+    Rt12 = inv(Rt2_w) * Rt1_w
+    return Rt12[1:3, 1:3], Rt12[1:3, 4]
 end
 
 function get_groundtruth_Rt(gtruth, time1)
@@ -66,4 +69,9 @@ function get_groundtruth_Rt(gtruth, time1)
     R = PE.quat_to_rot(q1)
     # Compute relative translation
     return R, t1
+end
+
+function get_T(R, t)
+    T = [R t; 0 0 0 1]
+    return T
 end
