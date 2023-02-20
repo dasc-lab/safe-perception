@@ -12,6 +12,9 @@ py = pybuiltins
 Integrated test to visualize alignment of point clouds from
 two consecutive frames using transformation from PoseEstimation
 """
+# Flag to test pose estimation with synthetic data.
+# Not all plotting will work as expected with this.
+use_synthetic_data = false
 
 # Read in images
 t1_str = "4043.278005"
@@ -97,8 +100,9 @@ function generate_synthetic_data()
     end
     return p1, p2_noisy, R_groundtruth, t_groundtruth
 end
-# Uncomment to use synthetic data
-#matched_pts1, matched_pts2, R_gt, t_gt = generate_synthetic_data()
+if use_synthetic_data
+    matched_pts1, matched_pts2, R_gt_1_2, t_gt_1_2 = generate_synthetic_data()
+end
 
 # Compute R, t using TLS
 c̄ = 0.07  # Maximum residual of inliers
@@ -107,11 +111,13 @@ c̄ = 0.07  # Maximum residual of inliers
     method_R=PE.TLS(c̄), # TODO: fix c̄, put in the theoretically correct value based on β
     method_t=PE.TLS(c̄)
 )
-T_tls_1_2 = get_T(R_tls_1_2)
+T_tls_1_2 = get_T(R_tls_1_2, t_tls_1_2)
 @show T_tls_1_2
 
 # Get ground truth by interpolating
-R_gt_1_2, t_gt_1_2 = get_groundtruth_Rt(gtruth, t1, t2)
+if !use_synthetic_data
+    R_gt_1_2, t_gt_1_2 = get_groundtruth_Rt(gtruth, t1, t2)
+end
 T_gt_1_2 = get_T(R_gt_1_2, t_gt_1_2)
 
 R_gt_1_w, t_gt_1_w = get_groundtruth_Rt(gtruth, t1)
@@ -132,12 +138,13 @@ T_gt_2_w = get_T(R_gt_2_w, t_gt_2_w)
 # Bring both sets of keypoints into the inertial frame
 inertial_pts1 = apply_T(matched_pts1, T_gt_1_w)
 inertial_pts2 = apply_T(matched_pts2, T_gt_2_w)
-show_correspondence!(vis, inertial_pts2, inertial_pts1)
 
 # Bring both sets of keypoints first into frame 2, then into inertial (world) frame
 matched_pts1_rotated_tls = apply_T(matched_pts1, T_gt_2_w*T_tls_1_2)
 matched_pts1_rotated_gt = apply_T(matched_pts1, T_gt_2_w*T_gt_1_2)
-# Visualize with frame 2 3d keypoints; both should match
-show_correspondence!(vis, inertial_pts2, matched_pts1_rotated_gt, "gt")
-#show_correspondence!(vis, inertial_pts2, matched_pts1_rotated_tls, "tls")
-#show_correspondence!(vis, inertial_pts2, matched_pts1, "invalid")
+# Plot both gt and tls points in world frame; should be close
+show_correspondence!(vis, inertial_pts2, matched_pts1_rotated_gt, "gt")  # Green
+show_correspondence!(vis, inertial_pts2, matched_pts1_rotated_tls, "tls")  # Yellow
+# Show what would happen without correction:
+# Interpret points in frame 1 erroneously as being in frame 2
+show_correspondence!(vis, inertial_pts2, apply_T(matched_pts1, T_gt_2_w), "invalid")
