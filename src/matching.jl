@@ -188,6 +188,8 @@ function show_correspondence!(vis::Visualizer, kpoints1, kpoints2, label=string(
         c1 = RGB(0, 0, 1)
         if label == "gt"
             c2 = RGB(0, 1, 0)
+        elseif label == "ls"
+            c2 = RGB(1, 0.6, 0)
         elseif label == "invalid"
             c2 = RGB(1, 0, 0)
         else

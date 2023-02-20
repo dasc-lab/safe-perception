@@ -114,6 +114,14 @@ c̄ = 0.07  # Maximum residual of inliers
 T_tls_1_2 = get_T(R_tls_1_2, t_tls_1_2)
 @show T_tls_1_2
 
+# Compute R, t using vanilla LS
+@time R_ls_1_2, t_ls_1_2 = PE.estimate_Rt(matched_pts1, matched_pts2;
+    method_pairing=PE.Star(),
+    method_R=PE.LS(),
+    method_t=PE.LS()
+)
+T_ls_1_2 = get_T(R_ls_1_2, t_ls_1_2)
+
 # Get ground truth by interpolating
 if !use_synthetic_data
     R_gt_1_2, t_gt_1_2 = get_groundtruth_Rt(gtruth, t1, t2)
@@ -132,8 +140,12 @@ T_gt_2_w = get_T(R_gt_2_w, t_gt_2_w)
 @show t_gt_1_2
 
 # Errors should be low
-@show PE.rotdist(R_tls, R_gt_1_2) * 180 / π
-@show norm(t_tls - t_gt_1_2)
+@show PE.rotdist(R_tls_1_2, R_gt_1_2) * 180 / π
+@show norm(t_tls_1_2 - t_gt_1_2)
+
+# Erros should be a bit higher
+@show PE.rotdist(R_ls_1_2, R_gt_1_2) * 180 / π
+@show norm(t_ls_1_2 - t_gt_1_2)
 
 # Bring both sets of keypoints into the inertial frame
 inertial_pts1 = apply_T(matched_pts1, T_gt_1_w)
@@ -142,9 +154,12 @@ inertial_pts2 = apply_T(matched_pts2, T_gt_2_w)
 # Bring both sets of keypoints first into frame 2, then into inertial (world) frame
 matched_pts1_rotated_tls = apply_T(matched_pts1, T_gt_2_w*T_tls_1_2)
 matched_pts1_rotated_gt = apply_T(matched_pts1, T_gt_2_w*T_gt_1_2)
+matched_pts1_rotated_ls = apply_T(matched_pts1, T_gt_2_w*T_ls_1_2)
 # Plot both gt and tls points in world frame; should be close
 show_correspondence!(vis, inertial_pts2, matched_pts1_rotated_gt, "gt")  # Green
 show_correspondence!(vis, inertial_pts2, matched_pts1_rotated_tls, "tls")  # Yellow
+# Show LS results (should be worse or equal to TLS)
+show_correspondence!(vis, inertial_pts2, matched_pts1_rotated_ls, "ls")  # Yellow
 # Show what would happen without correction:
 # Interpret points in frame 1 erroneously as being in frame 2
 show_correspondence!(vis, inertial_pts2, apply_T(matched_pts1, T_gt_2_w), "invalid")
