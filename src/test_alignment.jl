@@ -16,36 +16,7 @@ two consecutive frames using transformation from PoseEstimation
 # Not all plotting will work as expected with this.
 use_synthetic_data = false
 
-# Read in images
-t1_str = "4043.278005"
-t2_str = "4043.314868"
-t1 = parse(Float64, t1_str)
-t2 = parse(Float64, t2_str)
-path1 = "/root/datasets/training/plant_4/rgb/" * t1_str * ".png"
-path2 = "/root/datasets/training/plant_4/rgb/" * t2_str * ".png"
-depth_path1 = "/root/datasets/training/plant_4/depth/" * t1_str * ".png"
-depth_path2 = "/root/datasets/training/plant_4/depth/" * t2_str * ".png"
-
-img1_color = cv.imread(path1, cv.IMREAD_COLOR) 
-img2_color = cv.imread(path2, cv.IMREAD_COLOR)
-img1 = cv.cvtColor(img1_color, cv.COLOR_BGR2GRAY)
-img2 = cv.cvtColor(img2_color, cv.COLOR_BGR2GRAY)
-
-depth1 = cv.imread(depth_path1, cv.IMREAD_ANYDEPTH) 
-depth2 = cv.imread(depth_path2, cv.IMREAD_ANYDEPTH) 
-depth1 = pyconvert(Matrix{UInt16}, depth1) ./ 5000  # Divide by 5000 for eth3d dataset
-depth2 = pyconvert(Matrix{UInt16}, depth2) ./ 5000
-
-# Read in groundtruth
-# Columns: timestamp tx ty tz qx qy qz qw
-gt_path = "/root/datasets/training/plant_4/groundtruth.txt"
-gtruth = readdlm(gt_path, ' ', Float64, skipstart=1)
-
-# Read in camera intrinsics matrix
-cal_path = "/root/datasets/training/plant_4/calibration.txt"
-K = assemble_K_matrix(get_cal_params(cal_path)...)
-
-kp1, kp2, matches = get_matches(img1, img2, "orb")
+include("setup_test.jl")
 
 if !@isdefined vis
     vis = Visualizer()  # Only need to set up once
@@ -146,6 +117,13 @@ T_gt_2_w = get_T(R_gt_2_w, t_gt_2_w)
 # Erros should be a bit higher
 @show PE.rotdist(R_ls_1_2, R_gt_1_2) * 180 / π
 @show norm(t_ls_1_2 - t_gt_1_2)
+
+# Inlier noise, related to choice of ̄c. See TEASER paper.
+β = 0.005  # TODO(rgg): refine this value and ̄c
+# Estimate error on TLS
+@show ϵR = PE.ϵR(matched_pts1, β)  # Requires only inliers, TODO(rgg): discuss
+@show ϵt = PE.ϵt(β)
+
 
 # Bring both sets of keypoints into the inertial frame
 inertial_pts1 = apply_T(matched_pts1, T_gt_1_w)
