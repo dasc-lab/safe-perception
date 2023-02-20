@@ -36,10 +36,10 @@ function get_groundtruth_Rt(gtruth, time1, time2)
     second = interp_lin(gtruth, time2)
     # TODO(rgg): implement slerp for quaternion interpolation / use Quaternions.jl
     # Extract and normalize quaternions
-    wxyz1 = normalize([first[8]; first[5:7]])
-    wxyz2 = normalize([second[8]; second[5:7]])
-    q1 = PE.Quaternion(wxyz1)
-    q2 = PE.Quaternion(wxyz2)
+    xyzw1 = normalize(first[5:8])
+    xyzw2 = normalize(second[5:8])
+    q1 = PE.Quaternion(xyzw1)
+    q2 = PE.Quaternion(xyzw2)
     t1 = first[2:4]
     t2 = second[2:4]
     # Compute relative rotation and convert to rotation matrix
@@ -60,8 +60,8 @@ function get_groundtruth_Rt(gtruth, time1)
     first = interp_lin(gtruth, time1)
     # TODO(rgg): implement slerp for quaternion interpolation / use Quaternions.jl
     # Extract and normalize quaternions
-    wxyz1 = normalize([first[8]; first[5:7]])
-    q1 = PE.Quaternion(wxyz1)
+    xyzw = normalize(first[5:8])
+    q1 = PE.Quaternion(xyzw)
     t1 = first[2:4]
     R = PE.quat_to_rot(q1)
     # Compute relative translation
