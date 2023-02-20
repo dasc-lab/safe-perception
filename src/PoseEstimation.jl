@@ -343,6 +343,9 @@ function estimate_Rt(p1, p2; method_pairing::PairingMethod, method_R::LsqMethod,
     
     N = size(p1, 2)
     
+    # In order to estimate rototranslation, we need Translation Invariant Measurements (TIMs) 
+    # across the two frames. This allows for outlier rejection.
+    # Pairing method is configurable and not directly related to the keypoints themselves.
     is, js = make_pairs(method_pairing, N)
     
     a = p1[:, is] - p1[:, js]
