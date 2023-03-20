@@ -12,7 +12,7 @@ py = pybuiltins
 
 function get_matches(img1, img2, detector_type::String="orb")
     """
-    Get matches between two images.
+    Get matches between two grayscale images.
 
     Args:
         img1: first image

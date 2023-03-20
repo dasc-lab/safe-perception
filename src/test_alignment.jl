@@ -82,11 +82,17 @@ c̄ = 0.07  # Maximum residual of inliers
     method_R=PE.TLS(c̄), # TODO: fix c̄, put in the theoretically correct value based on β
     method_t=PE.TLS(c̄)
 )
+@time R_tls_2_1, t_tls_2_1 = PE.estimate_Rt(matched_pts2, matched_pts1;
+    method_pairing=PE.Star(),
+    method_R=PE.TLS(c̄), # TODO: fix c̄, put in the theoretically correct value based on β
+    method_t=PE.TLS(c̄)
+)
 T_tls_1_2 = get_T(R_tls_1_2, t_tls_1_2)
-@show T_tls_1_2
+T_tls_2_1 = get_T(R_tls_2_1, t_tls_2_1)
+@show norm(T_tls_1_2 - inv(T_tls_2_1))  # Should be 0
 
 # Compute R, t using vanilla LS
-@time R_ls_1_2, t_ls_1_2 = PE.estimate_Rt(matched_pts1, matched_pts2;
+R_ls_1_2, t_ls_1_2 = PE.estimate_Rt(matched_pts1, matched_pts2;
     method_pairing=PE.Star(),
     method_R=PE.LS(),
     method_t=PE.LS()
@@ -96,8 +102,11 @@ T_ls_1_2 = get_T(R_ls_1_2, t_ls_1_2)
 # Get ground truth by interpolating
 if !use_synthetic_data
     R_gt_1_2, t_gt_1_2 = get_groundtruth_Rt(gtruth, t1, t2)
+    R_gt_2_1, t_gt_2_1 = get_groundtruth_Rt(gtruth, t2, t1)
 end
 T_gt_1_2 = get_T(R_gt_1_2, t_gt_1_2)
+T_gt_2_1 = get_T(R_gt_2_1, t_gt_2_1)
+@show norm(T_gt_1_2 - inv(T_gt_2_1))  # Should be 0
 
 R_gt_1_w, t_gt_1_w = get_groundtruth_Rt(gtruth, t1)
 R_gt_2_w, t_gt_2_w = get_groundtruth_Rt(gtruth, t2)
@@ -107,10 +116,10 @@ T_gt_2_w = get_T(R_gt_2_w, t_gt_2_w)
 # Verify relative translation matches absolute
 @show norm(T_gt_1_w - (T_gt_2_w*T_gt_1_2))  # Should be ~= 0
 
-@show R_gt_1_2
-@show t_gt_1_2
-
 # Errors should be low
+@show norm(T_gt_1_2 - T_tls_1_2)
+@show norm(T_gt_2_1 - inv(T_tls_1_2))
+@show norm(T_gt_2_1 - T_tls_2_1)
 @show PE.rotdist(R_tls_1_2, R_gt_1_2) * 180 / π
 @show norm(t_tls_1_2 - t_gt_1_2)
 

@@ -30,28 +30,20 @@ function get_groundtruth_Rt(gtruth, time1, time2)
     """
     Gets relative rototranslation from time1 to time2 from ground truth.
     """
-    # Interpolate to find start and end rotations and translations
-    # Columns: timestamp tx ty tz qx qy qz qw
-    first = interp_lin(gtruth, time1)
-    second = interp_lin(gtruth, time2)
-    # TODO(rgg): implement slerp for quaternion interpolation / use Quaternions.jl
-    # Extract and normalize quaternions
-    xyzw1 = normalize(first[5:8])
-    xyzw2 = normalize(second[5:8])
-    q1 = PE.Quaternion(xyzw1)
-    q2 = PE.Quaternion(xyzw2)
-    t1 = first[2:4]
-    t2 = second[2:4]
-    # Compute relative rotation and convert to rotation matrix
-    # Note that (q2*q1')*q1 = q2 => (q2*q1') represents rotation from 1 to 2
-    # q = PE.quatprod(q2, PE.quatinv(q1))
-
     # Convention for ground truth is R, t go from frame 2 to world frame
-    Rt1_w = [PE.quat_to_rot(q1) t1; 0 0 0 1]
-    Rt2_w = [PE.quat_to_rot(q2) t2; 0 0 0 1]
+    R_1_w, t_1_w = get_groundtruth_Rt(gtruth, time1) 
+    R_2_w, t_2_w = get_groundtruth_Rt(gtruth, time2) 
+    T_1_w = get_T(R_1_w, t_1_w)
+    T_2_w = get_T(R_2_w, t_2_w)
+
     # take point to w frame from frame 1, then go from w from to frame 2
-    Rt12 = inv(Rt2_w) * Rt1_w
-    return Rt12[1:3, 1:3], Rt12[1:3, 4]
+    T_1_2 = inv(T_2_w) * T_1_w
+    return T_1_2[1:3, 1:3], T_1_2[1:3, 4]
+end
+
+function extract_R_t(T)
+    # Takes in 4x4 rototranslation and return 3x3 R, 3x1 t
+    return T[1:3, 1:3], T[1:3, 4]
 end
 
 function get_groundtruth_Rt(gtruth, time1)
@@ -74,4 +66,56 @@ end
 function get_T(R, t)
     T = [R t; 0 0 0 1]
     return T
+end
+
+function get_depth(data_folder, dimg_name)
+    depth_path = joinpath(data_folder, dimg_name) 
+    depth = cv.imread(depth_path, cv.IMREAD_ANYDEPTH) 
+    depth = pyconvert(Matrix{UInt16}, depth) ./ 5000  # Divide by 5000 for eth3d dataset
+    return depth
+end
+
+function get_imgs(data_folder, img_name)
+    path = joinpath(data_folder, img_name) 
+    img_color = cv.imread(path, cv.IMREAD_COLOR) 
+    return img_color
+end
+
+function get_matched_pts(img1, img2, depth1, depth2)
+    """
+    Returns two 3xN matrices containing 3D points.
+    Columns align to form matched pairs of keypoints.
+
+    Args:
+        img1: grayscale image 1 for computing keypoints
+        img2: grayscale image 2 for computing keypoints
+        depth1: depth image corresponding to image 1
+        depth2: depth image corresponding to image 2
+    """
+
+    kp1, kp2, matches = get_matches(img1, img2, "orb")
+    # PoseEstimation expects two 3xN matrices
+    # First, get keypoint lists in 3d
+    p1 = np.column_stack([kp.pt for kp in kp1])  
+    p1 = pyconvert(Matrix{Float64}, p1)
+    p1_3d = get_points_3d(K, p1, depth1)
+
+    p2 = np.column_stack([kp.pt for kp in kp2])
+    p2 = pyconvert(Matrix{Float64}, p2)
+    p2_3d = get_points_3d(K, p2, depth2)
+
+    # Then, assemble corresponding matrices of points from matches
+    n_matches = pyconvert(Int32, py.len(matches))
+    matched_pts1 = zeros(Float64, 3, n_matches)
+    matched_pts2 = zeros(Float64, 3, n_matches)
+    for i in 1:n_matches
+        m = matches[i-1]  # Python indexing
+        idx1 = pyconvert(Int32, m.queryIdx)+1
+        idx2 = pyconvert(Int32, m.trainIdx)+1
+        matched_pts1[:, i] = p1_3d[idx1]
+        matched_pts2[:, i] = p2_3d[idx2]
+    end
+    # Finally, clean correspondence list of any pairs that contain either point at the origin (invalid depth)
+    matched_pts1, matched_pts2 = remove_invalid_matches(matched_pts1, matched_pts2)
+    return matched_pts1, matched_pts2
 end
