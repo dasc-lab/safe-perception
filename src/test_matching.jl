@@ -1,6 +1,10 @@
 include("ingest.jl")
 include("matching.jl")
 using GeometryBasics, ColorTypes, CoordinateTransformations, MeshCat, LinearAlgebra
+using DelimitedFiles
+using Logging, Printf
+debug_logger = Logging.ConsoleLogger(Logging.Info)
+
 if !@isdefined vis
     vis = Visualizer()  # Only need to set up once
 end
@@ -12,15 +16,26 @@ delete!(vis)  # Clear any rendered objects
 
 function test_match(img1, img2, feature_string::String)
     kp1, kp2, matches = get_matches(img1, img2, feature_string)
-    img3 = cv.drawMatches(img1,kp1,img2,kp2,matches[pyslice(10)],py.None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+    with_logger(debug_logger) do
+        @info @sprintf("Keypoints in frame 1 using %s: %s", feature_string, np.shape(kp1)[0])
+        @info @sprintf("Keypoints in frame 2 using %s: %s", feature_string, np.shape(kp2)[0])
+        @info @sprintf("Matches using %s: %s", feature_string, np.shape(matches)[0])
+    end
+    img3 = cv.drawMatches(img1,kp1,img2,kp2,matches[pyslice(20)],py.None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
     cv.imwrite("/root/src/" * feature_string * "_matches.jpg", img3)
 end
 
 # Read in images
-path1 = "/root/datasets/training/plant_4/rgb/4043.278005.png"
-path2 = "/root/datasets/training/plant_4/rgb/4043.314868.png"
-depth_path1 = "/root/datasets/training/plant_4/depth/4043.278005.png"
-depth_path2 = "/root/datasets/training/plant_4/depth/4043.314868.png"
+# Tested with plant_4 and sofa_2
+df = joinpath("/root/datasets/training/plant_4/")
+img_filenames = [joinpath("rgb", f) for f in readdir(joinpath(df, "rgb"))]
+depth_filenames = readdlm(joinpath(df, "depth.txt"))[:, 2];
+file_ind1 = 12
+file_ind2 = 13
+path1 = joinpath(df, img_filenames[file_ind1])
+path2 = joinpath(df, img_filenames[file_ind2])
+depth_path1 = joinpath(df, depth_filenames[file_ind1])
+depth_path2 = joinpath(df, depth_filenames[file_ind2])
 
 img1_color = cv.imread(path1, cv.IMREAD_COLOR) 
 img2_color = cv.imread(path2, cv.IMREAD_COLOR)
@@ -30,7 +45,7 @@ depth1 = cv.imread(depth_path1, cv.IMREAD_ANYDEPTH)
 depth2 = cv.imread(depth_path2, cv.IMREAD_ANYDEPTH) 
 
 # Read in camera intrinsics matrix
-cal_path = "/root/datasets/training/plant_4/calibration.txt"
+cal_path = joinpath(df, "calibration.txt")
 K = assemble_K_matrix(get_cal_params(cal_path)...)
 
 test_match(img1, img2, "orb")
@@ -40,6 +55,7 @@ test_match(img1, img2, "akaze")
 
 # Test 3D correspondences
 kp1, kp2, matches = get_matches(img1, img2, "orb")
+
 # Get point cloud by reprojecting + depth info
 # Invalid returns will be represented as zeros (projected to origin)
 # Assemple in numpy and convert to Julia. Not sure if optimal.

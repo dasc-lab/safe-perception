@@ -6,11 +6,12 @@ using PythonCall, GeometryBasics, LinearAlgebra
 using ColorTypes, MeshCat
 using UUIDs
 
+Point3f = Point3f0  # For newer versions of GeometryBasics
 cv = pyimport("cv2")
 np = pyimport("numpy")
 py = pybuiltins
 
-function get_matches(img1, img2, detector_type::String="orb")
+function get_matches(img1, img2, detector_type::String="orb", nfeatures=1000)
     """
     Get matches between two grayscale images.
 
@@ -18,24 +19,30 @@ function get_matches(img1, img2, detector_type::String="orb")
         img1: first image
         img2: second image 
         detector_type: "orb", "sift", or "akaze"
+        nfeatures: max features to retain for all detectors except AKAZE. Does NOT guarantee this many features.
 
     Returns: keypoints from image 1, keypoints from image 2, matches, all as relevant OpenCV objects
     """
 
     # Set up detector and distance to use for matching
     if detector_type == "orb"
-        detector = cv.ORB_create()
+        # Lower threshold = more features
+        detector = cv.ORB_create(nfeatures=nfeatures, scoreType=1, fastThreshold=5)
         feature_norm = cv.NORM_HAMMING
     elseif detector_type == "sift"
         # May not work depending on version of OpenCV; patent expired 03-2020
-        detector = cv.SIFT_create()
+        # Higher threshold = more features
+        detector = cv.SIFT_create(nfeatures=nfeatures, edgeThreshold=100)
         feature_norm = cv.NORM_L2
     elseif detector_type == "akaze"
-        detector = cv.AKAZE_create()
+        # AKAZE does not directly support the nfeatures argument
+        # Lower threshold = more features
+        detector = cv.AKAZE_create(threshold=0.0001)
         feature_norm = cv.NORM_HAMMING
     elseif detector_type == "surf"
         # Note: SURF is patented and requires a special build flag / contrib opencv
-        detector = cv.SURF_create()
+        # TODO(rgg): explore whether adjustments to hessianThreshold are needed to increase number of features extracted.
+        detector = cv.SURF_create(nfeatures=nfeatures)
         feature_norm = cv.NORM_L2
     else
         return
