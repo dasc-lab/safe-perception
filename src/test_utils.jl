@@ -92,7 +92,6 @@ function get_matched_pts(img1, img2, depth1, depth2)
         depth1: depth image corresponding to image 1
         depth2: depth image corresponding to image 2
     """
-
     kp1, kp2, matches = get_matches(img1, img2, "orb")
     # PoseEstimation expects two 3xN matrices
     # First, get keypoint lists in 3d
