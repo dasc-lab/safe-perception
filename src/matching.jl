@@ -5,6 +5,7 @@ ENV["JULIA_PYTHONCALL_EXE"] = "/usr/bin/python3"
 using PythonCall, GeometryBasics, LinearAlgebra
 using ColorTypes, MeshCat
 using UUIDs
+using Logging, Printf
 
 Point3f = Point3f0  # For newer versions of GeometryBasics
 cv = pyimport("cv2")
@@ -27,7 +28,7 @@ function get_matches(img1, img2, detector_type::String="orb", nfeatures=1000)
     # Set up detector and distance to use for matching
     if detector_type == "orb"
         # Lower threshold = more features
-        detector = cv.ORB_create(nfeatures=nfeatures, scoreType=1, fastThreshold=5)
+        detector = cv.ORB_create(nfeatures=nfeatures, scoreType=1, fastThreshold=2)
         feature_norm = cv.NORM_HAMMING
     elseif detector_type == "sift"
         # May not work depending on version of OpenCV; patent expired 03-2020
@@ -59,6 +60,10 @@ function get_matches(img1, img2, detector_type::String="orb", nfeatures=1000)
     matches = bf.match(des1,des2)
     # Sort them in the order of their distance.
     matches = py.sorted(matches, key = x -> x.distance)
+    n_matches = pyconvert(Int, py.len(matches))
+    if n_matches < 200
+        @warn "Low matched feature count across frames: " n_matches
+    end
 
     return kp1, kp2, matches
 end
