@@ -1,6 +1,9 @@
 module PoseEstimation
 
+# https://github.com/dev10110/GraduatedNonConvexity.jl
 using LinearAlgebra, StaticArrays, GraduatedNonConvexity, Parameters
+# https://github.com/dev10110/ParallelMaximumClique.jl
+using Graphs, ParallelMaximumClique # For max clique. See also SimpleWeightedGraph, but not compatible with ParallelMaximumClique
 using Random, Rotations 
 
 SV3{F} = SVector{3,F}
@@ -30,7 +33,7 @@ function ransac(N, data, solver, res, c, n; verbose=false, min_inlier_ratio=0.1,
         # solve for the best solution on these points
         sample_x = solver(sample_w, data)
         
-        # check for inliners
+        # check for inliers
         rs = res(sample_x, data)
         inliers = [i for i=1:N if abs(rs[i]) <= c]
         #@show length(inliers)
@@ -218,6 +221,8 @@ function make_pairs(m::Star, N)
     return is, js
 end
 
+# TODO(rgg): add random or other sparse topologies
+
 function make_pairs(m::Complete, N::T) where {T}
     
     is = T[]
@@ -359,6 +364,51 @@ function estimate_Rt(p1, p2; method_pairing::PairingMethod, method_R::LsqMethod,
     
 end
 
+function get_inlier_inds(p1, p2, ϵ, method_pairing::PairingMethod)
+    """
+    Use translation invariant measurements to find inlier indices using max-clique inlier selection.
+    Returns: list of indices 
+    Args:
+        p1: 3xN list of points in frame 1
+        p2: 3xN list of points in frame 2 that correspond column-wise to points in p1.
+            May contain false correspondences, and noise determined by sensing & feature detection.
+        ϵ: maximum noise for inlier correspondences
+        method_pairing: pairing method to create TIMs from keypoints
+    Assumes scaling is unity. TODO(rgg): implement scale estimation?
+    Optimal (most accurate) pairing method is to form a complete graph, but this is slow.
+    """
+    N = size(p1, 2)
+    # Create TIMs (see: TEASER paper)
+    is, js = make_pairs(method_pairing, N)  # TODO(rgg): use Graphs.jl throughout?
+    E = length(is)
+    # Vectors from keypoints in frame 1 to other keypoints in frame 1
+    # Columns in ̄a correspond to columns in ̄b
+    tim_̄a = p1[:, is] - p1[:, js] 
+    tim_̄b = p2[:, is] - p2[:, js]
+    # Create TRIMs
+    G = SimpleGraph(N)  # Unweighted edges for compatibility with max clique library
+    # Skip edges that are not consistent with estimated scale (assume s=1 for now)
+    # s_ij = s + o_ij^s + ϵ_ij^s; TRIM is equal to true scaling + outlier noise + modeled noise 
+    # relative noise |ϵ_ij| ≤ 2*|ϵ| as the ϵ is the noise for measurements in each frame
+    ϵ_ij = 2*ϵ
+    ϵ_ij_s = ϵ_ij ./ norm.(tim_̄a)
+    s_expected = 1  # Assumption (static environment, camera parameters)
+    # Compute scale estimate for each TRIM (edge weights in graph)
+    s = norm.(tim_̄b) ./ norm.(tim_̄a) 
+    # Construct graph from TRIMs
+    for k in 1:E
+        # All TRIMs with scale outside of s ± ϵ_ij_s are inconsistent, do not add these edges
+        if s_expected-ϵ_ij_s[k] <= s[k] <= s_expected+ϵ_ij_s[k]
+            add_edge!(G, is[k], js[k])
+        end
+    end
+    
+    # Find maximum clique in remaining graph to get inliners
+    clique = maximum_clique(G)
+
+    # Return indices of vertices (points) that belong to inlier TRIMs.
+    return clique
+end
 
 σmin(A) = sqrt(max(0, eigmin(A'*A)))
 

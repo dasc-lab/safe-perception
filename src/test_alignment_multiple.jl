@@ -14,7 +14,7 @@ Integrated test to visualize alignment of point clouds using computed
 rototranslation.
 """
 # Tested with plant_4, mannequin_face_1, sofa_2, plant_scene_2
-df = joinpath("/root/datasets/training/plant_scene_2/")
+df = joinpath("/root/datasets/training/sofa_2/")
 
 # Read in images
 ground_truth = readdlm(joinpath(df, "groundtruth.txt"), skipstart=1);
@@ -48,7 +48,7 @@ c̄ = 0.07  # Maximum residual of inliers
 function plot_all()
     N = length(img_filenames)
     step = 3
-    start = 9
+    start = 81
     stop = N-step
     R_init, t_init = get_groundtruth_Rt(gtruth, depth_ts[start])
     local prev_T = get_T(R_init, t_init)
@@ -71,7 +71,7 @@ function plot_all()
         t_1 = depth_ts[i]
         t_2 = depth_ts[i+step]
         matched_pts1, matched_pts2 = get_matched_pts(curr_gray, next_gray, curr_dimg, next_dimg)
-        R_tls_2_1, t_tls_2_1 = PE.estimate_Rt(matched_pts2, matched_pts1;
+        @time R_tls_2_1, t_tls_2_1 = PE.estimate_Rt(matched_pts2, matched_pts1;
             method_pairing=PE.Star(),
             method_R=PE.TLS(c̄), # TODO: fix c̄, put in the theoretically correct value based on β
             method_t=PE.TLS(c̄)
@@ -83,6 +83,14 @@ function plot_all()
         T_gt_2_w = get_T(get_groundtruth_Rt(gtruth, t_2)...)
         prev_T = prev_T * T_tls_2_1
         #@show norm(prev_T - T_gt_2_w)
+
+        # Calculate error bounds for relative transformation (not cumulative)
+        # Inlier noise, related to choice of ̄c. See TEASER paper.
+        β = 0.005  # TODO(rgg): refine this value and ̄c
+        # Estimate error on TLS
+        @show @time(ϵR = PE.ϵR(matched_pts2, β))  # Requires only inliers, TODO(rgg): discuss
+        @show ϵt = PE.ϵt(β)
+
         R, t = extract_R_t(prev_T)
         show_pointcloud_color!(vis, next_dimg, next_color, K, R, t)
     end

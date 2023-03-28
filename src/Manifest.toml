@@ -2,7 +2,7 @@
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "07ef72e33ac7bcace06aafccfa8b916b8cacb180"
+project_hash = "70f8383caa73165ff698d9e51ba17ceb1877fc62"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -927,6 +927,12 @@ deps = ["Artifacts", "Libdl"]
 uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
 version = "10.40.0+0"
 
+[[deps.PMC_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "c715602dea94a9a57a3bbb5f6310fc6344b82a3c"
+uuid = "249dbc79-71b0-5013-a2f7-d158f2044670"
+version = "0.1.1+0"
+
 [[deps.PNGFiles]]
 deps = ["Base64", "CEnum", "ImageCore", "IndirectArrays", "OffsetArrays", "libpng_jll"]
 git-tree-sha1 = "f809158b27eba0c18c269cf2a2be6ed751d3e81d"
@@ -938,6 +944,14 @@ deps = ["OffsetArrays"]
 git-tree-sha1 = "03a7a85b76381a3d04c7a1656039197e70eda03d"
 uuid = "5432bcbf-9aad-5242-b902-cca2824c8663"
 version = "0.5.11"
+
+[[deps.ParallelMaximumClique]]
+deps = ["Graphs", "LinearAlgebra", "PMC_jll", "SparseArrays"]
+git-tree-sha1 = "7e1154891544148f787381673367cacc0287f2e0"
+repo-rev = "main"
+repo-url = "http://github.com/dev10110/ParallelMaximumClique.jl"
+uuid = "2ead3118-b729-4a15-8a49-daec07ff5988"
+version = "0.1.1"
 
 [[deps.Parameters]]
 deps = ["OrderedCollections", "UnPack"]

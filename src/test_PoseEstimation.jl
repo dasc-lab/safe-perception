@@ -1,6 +1,7 @@
 include("PoseEstimation.jl")
 using .PoseEstimation
 using BenchmarkTools, Random, Rotations
+using LinearAlgebra  # norm
 PE = PoseEstimation
 
 Random.seed!(42);
@@ -26,8 +27,8 @@ for i=1:N
 end
 
 # add outliers to some% of data
-inds = [i for i=2:N if rand() < 0.70]
-for i=inds
+outlier_inds = [i for i=2:N if rand() < 0.70]
+for i=outlier_inds
     p2_noisy[:, i] += 3*randn(3)
 end
 
@@ -56,11 +57,12 @@ c̄ = 0.005
 
 # estimate the error bound for rotation matrices
 # this is a bound on the maximum ||R - R̂||_F
-inliers = [i for i=1:N if !(i in inds)];
+inlier_inds = [i for i=1:N if !(i in outlier_inds)];
 @time begin
     bb = Inf
     for i=1:1000
-        global bb = min(bb, PE.ϵR(p1[:, rand(inliers, 4)], β))
+        # Randomly select subset of inliers
+        global bb = min(bb, PE.ϵR(p1[:, rand(inlier_inds, 4)], β))
     end
 end
 @show bb
@@ -68,3 +70,13 @@ end
 
 @show norm(R_ls - R_groundtruth)
 @show norm(R_tls - R_groundtruth)
+
+# Test inlier detection with scale invariance and max clique
+est_inlier_inds = PE.get_inlier_inds(p1, p2_noisy, β, PE.Star())
+correct_inlier_count = length(intersect(Set(inlier_inds), Set(est_inlier_inds)))
+est_outlier_inds = [i for i=1:N if !(i in est_inlier_inds)]
+correct_outlier_count = length(intersect(Set(outlier_inds), Set(est_outlier_inds)))
+@show length(outlier_inds)
+@show correct_outlier_count
+@show length(inlier_inds)
+@show correct_inlier_count
