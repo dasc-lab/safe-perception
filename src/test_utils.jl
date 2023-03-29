@@ -118,3 +118,26 @@ function get_matched_pts(img1, img2, depth1, depth2)
     matched_pts1, matched_pts2 = remove_invalid_matches(matched_pts1, matched_pts2)
     return matched_pts1, matched_pts2
 end
+
+function generate_synthetic_data(;N=1_000, β=0.01, outlier_fraction=0.5, outlier_noise=40)
+    # Generate a ground-truth pose
+    R_groundtruth = rand(RotMatrix{3})
+    # Generate a ground-truth translation
+    t_groundtruth = randn(3)
+    # Generate points in frame 1
+    p1 = randn(3, N)
+    # Generate true p2
+    p2 = R_groundtruth * p1  .+ t_groundtruth
+    # Make noisy measurements, bounded by inlier noise β
+    p2_noisy = copy(p2)
+    for i=1:N
+        p2_noisy[:, i] += β*(2*rand(3).-1) # Zero-mean uniform noise
+    end
+
+    # Add outliers to some percent of data. This noise exceeds inlier noise.
+    outlier_inds = [i for i=2:N if rand() < outlier_fraction]
+    for i=outlier_inds
+        p2_noisy[:, i] += outlier_noise*randn(3)
+    end
+    return p1, p2_noisy, R_groundtruth, t_groundtruth, outlier_inds
+end
