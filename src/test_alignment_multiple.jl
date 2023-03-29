@@ -42,13 +42,11 @@ end
 delete!(vis)  # Clear any rendered objects
 
 c̄ = 0.07  # Maximum residual of inliers
-# R1: inertial to frame 1.
-# Inverse (transpose) of this should be frame 1 to inertial.
 
 function plot_all()
     N = length(img_filenames)
     step = 3
-    start = 81
+    start = 9
     stop = N-step
     R_init, t_init = get_groundtruth_Rt(gtruth, depth_ts[start])
     local prev_T = get_T(R_init, t_init)
