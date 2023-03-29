@@ -377,7 +377,7 @@ function get_inlier_inds(p1, p2, ϵ, method_pairing::PairingMethod)
         ϵ: maximum noise for inlier correspondences
         method_pairing: pairing method to create TIMs from keypoints
     Assumes scaling is unity. TODO(rgg): implement scale estimation?
-    Optimal (most accurate) pairing method is to form a complete graph, but this is slow.
+    Optimal (most accurate) pairing method is to form a complete graph.
     """
     N = size(p1, 2)
     # Create TIMs (see: TEASER paper)
