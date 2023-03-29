@@ -48,31 +48,8 @@ end
 matched_pts1, matched_pts2 = remove_invalid_matches(matched_pts1, matched_pts2)
 
 # Synthetic data
-function generate_synthetic_data()
-    Random.seed!(42);
-    N = 50 # number of correspondences
-    p1 = randn(3, N)
-    # generate a ground-truth pose
-    R_groundtruth = rand(RotMatrix{3})
-    # generate a ground-truth translation
-    t_groundtruth = randn(3)
-    # generate true p2
-    p2 = R_groundtruth * p1  .+ t_groundtruth
-    # make noisy measurements
-    β = 0.01
-    p2_noisy = copy(p2)
-    for i=1:N
-        p2_noisy[:, i] += β*(2*rand(3).-1)
-    end
-    # add outliers to some% of data
-    inds = [i for i=2:N if rand() < 0.10]
-    for i=inds
-        p2_noisy[:, i] += 3*randn(3)
-    end
-    return p1, p2_noisy, R_groundtruth, t_groundtruth
-end
 if use_synthetic_data
-    matched_pts1, matched_pts2, R_gt_1_2, t_gt_1_2 = generate_synthetic_data()
+    matched_pts1, matched_pts2, R_gt_1_2, t_gt_1_2, outlier_inds = generate_synthetic_data()
 end
 
 # Compute R, t using TLS
@@ -129,10 +106,11 @@ T_gt_2_w = get_T(R_gt_2_w, t_gt_2_w)
 
 # Inlier noise, related to choice of ̄c. See TEASER paper.
 β = 0.005  # TODO(rgg): refine this value and ̄c
-# Estimate error on TLS
-@show ϵR = PE.ϵR(matched_pts1, β)  # Requires only inliers, TODO(rgg): discuss
-@show ϵt = PE.ϵt(β)
-
+# Estimate error on TLS. Guaranteed upper bound, may not be tight.
+# Requires only inliers (or false correspondences that happen to lie within error bounds)
+@time ϵR, ϵt = PE.est_err_bounds(matched_pts1, matched_pts2, β, iterations=1000)
+@show ϵR
+@show ϵt
 
 # Bring both sets of keypoints into the inertial frame
 inertial_pts1 = apply_T(matched_pts1, T_gt_1_w)

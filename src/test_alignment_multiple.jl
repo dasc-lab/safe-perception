@@ -88,8 +88,8 @@ function plot_all()
         # Inlier noise, related to choice of ̄c. See TEASER paper.
         β = 0.005  # TODO(rgg): refine this value and ̄c
         # Estimate error on TLS
-        @show @time(ϵR = PE.ϵR(matched_pts2, β))  # Requires only inliers, TODO(rgg): discuss
-        @show ϵt = PE.ϵt(β)
+        @time ϵR, ϵt = PE.est_err_bounds(matched_pts1, matched_pts2, β, iterations=1000)
+        @show ϵR, ϵt
 
         R, t = extract_R_t(prev_T)
         show_pointcloud_color!(vis, next_dimg, next_color, K, R, t)

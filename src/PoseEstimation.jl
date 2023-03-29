@@ -464,5 +464,26 @@ function ϵt(β)
     return (9 + 3*sqrt(3))*β
 end
 
+function est_err_bounds(p1, p2, β; iterations=1000)
+    """
+    Estimate error bounds on R, t for the given set of correspondences.
+    Uses scale consistency and max-clique to predict inliers.
+    Bound gets tighter with more iterations, but is always conservative.
+    Args:
+        p1: 3xN points in frame 1
+        p2: 3xN points in frame 2 that correspond to those in frame 1, column-wise
+        β: bound on the noise for points/correspondences in each frame; |ϵ| ≤ β
+    """
+    N = size(p1, 2)
+    inliers = get_inlier_inds(p1, p2, β, Complete(N))
+    best_ϵR=Inf
+    # Select random subsets of 4 inliers.
+    for i=1:iterations
+        best_ϵR = min(best_ϵR, ϵR(p1[:, rand(inliers, 4)], β))
+    end
+    return best_ϵR, ϵt(β)
+end
+
+
 
 end
