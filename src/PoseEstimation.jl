@@ -5,6 +5,8 @@ using LinearAlgebra, StaticArrays, GraduatedNonConvexity, Parameters
 # https://github.com/dev10110/ParallelMaximumClique.jl
 using Graphs, ParallelMaximumClique # For max clique. See also SimpleWeightedGraph, but not compatible with ParallelMaximumClique
 using Random, Rotations 
+using Printf, Logging
+debug_logger = Logging.ConsoleLogger(Logging.Info)
 
 SV3{F} = SVector{3,F}
 SV4{F} = SVector{4,F}
@@ -221,7 +223,7 @@ function make_pairs(m::Star, N)
     return is, js
 end
 
-# TODO(rgg): add random or other sparse topologies
+# TODO(rgg): add other sparse topologies?
 
 function make_pairs(m::Complete, N::T) where {T}
     
@@ -381,6 +383,7 @@ function get_inlier_inds(p1, p2, ϵ, method_pairing::PairingMethod)
     # Create TIMs (see: TEASER paper)
     is, js = make_pairs(method_pairing, N)  # TODO(rgg): use Graphs.jl throughout?
     E = length(is)
+    @info @sprintf("Number of edges in TIM graph: %i\n", E)
     # Vectors from keypoints in frame 1 to other keypoints in frame 1
     # Columns in ̄a correspond to columns in ̄b
     tim_̄a = p1[:, is] - p1[:, js] 
@@ -391,18 +394,26 @@ function get_inlier_inds(p1, p2, ϵ, method_pairing::PairingMethod)
     # s_ij = s + o_ij^s + ϵ_ij^s; TRIM is equal to true scaling + outlier noise + modeled noise 
     # relative noise |ϵ_ij| ≤ 2*|ϵ| as the ϵ is the noise for measurements in each frame
     ϵ_ij = 2*ϵ
-    ϵ_ij_s = ϵ_ij ./ norm.(tim_̄a)
+    ϵ_ij_s = ϵ_ij ./ norm.(eachcol(tim_̄a))
     s_expected = 1  # Assumption (static environment, camera parameters)
     # Compute scale estimate for each TRIM (edge weights in graph)
-    s = norm.(tim_̄b) ./ norm.(tim_̄a) 
+    s = norm.(eachcol(tim_̄b)) ./ norm.(eachcol(tim_̄a))
     # Construct graph from TRIMs
     for k in 1:E
         # All TRIMs with scale outside of s ± ϵ_ij_s are inconsistent, do not add these edges
+        @debug @sprintf("Processing edge %i-%i with s=%f and scale bounds +/-%f\n", is[k], js[k], s[k], ϵ_ij_s[k])
         if s_expected-ϵ_ij_s[k] <= s[k] <= s_expected+ϵ_ij_s[k]
             add_edge!(G, is[k], js[k])
         end
     end
-    
+    @info @sprintf("Number of edges in pruned TRIM graph: %i\n", length(edges(G)))
+    # For debugging only, not needed when using with max clique
+    scale_consistent_inds = Set()
+    for e in edges(G)
+        push!(scale_consistent_inds, e.src)
+        push!(scale_consistent_inds, e.dst)
+    end
+
     # Find maximum clique in remaining graph to get inliners
     clique = maximum_clique(G)
 
