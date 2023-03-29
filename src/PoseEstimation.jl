@@ -407,12 +407,14 @@ function get_inlier_inds(p1, p2, ϵ, method_pairing::PairingMethod)
         end
     end
     @info @sprintf("Number of edges in pruned TRIM graph: %i\n", length(edges(G)))
+
     # For debugging only, not needed when using with max clique
-    scale_consistent_inds = Set()
-    for e in edges(G)
-        push!(scale_consistent_inds, e.src)
-        push!(scale_consistent_inds, e.dst)
-    end
+    # scale_consistent_inds = Set()
+    # for e in edges(G)
+    #     push!(scale_consistent_inds, e.src)
+    #     push!(scale_consistent_inds, e.dst)
+    # end
+    # return scale_consistent_inds
 
     # Find maximum clique in remaining graph to get inliners
     clique = maximum_clique(G)
