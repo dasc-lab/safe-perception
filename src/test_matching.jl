@@ -21,17 +21,17 @@ function test_match(img1, img2, feature_string::String)
         @info @sprintf("Keypoints in frame 2 using %s: %s", feature_string, np.shape(kp2)[0])
         @info @sprintf("Matches using %s: %s", feature_string, np.shape(matches)[0])
     end
-    img3 = cv.drawMatches(img1,kp1,img2,kp2,matches[pyslice(20)],py.None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+    img3 = cv.drawMatches(img1,kp1,img2,kp2,matches[pyslice(60)],py.None,flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
     cv.imwrite("/root/src/" * feature_string * "_matches.jpg", img3)
 end
 
 # Read in images
 # Tested with plant_4 and sofa_2
-df = joinpath("/root/datasets/training/plant_4/")
+df = joinpath("/root/datasets/training/sofa_2/")
 img_filenames = [joinpath("rgb", f) for f in readdir(joinpath(df, "rgb"))]
 depth_filenames = readdlm(joinpath(df, "depth.txt"))[:, 2];
-file_ind1 = 12
-file_ind2 = 13
+file_ind1 = 87
+file_ind2 = 90
 path1 = joinpath(df, img_filenames[file_ind1])
 path2 = joinpath(df, img_filenames[file_ind2])
 depth_path1 = joinpath(df, depth_filenames[file_ind1])

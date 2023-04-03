@@ -1,37 +1,105 @@
-# For storing point clouds in (more) efficient representations
+# Helper functions for building maps
+using Polyhedra
+include("matching.jl")  # For transformation functions, move these / use library?
 
-# 2D occupancy grid
-using StaticArrays
-
-struct OccupancyGrid{T<:Real}
-    start_x::T # world frame x-coord at (1, 1)
-    start_y::T # world frame y-coord at (1, 1)
-    cell_size::T # Size of each square grid cell
-    grid::MMatrix  # Possible to specify Bool type but not dimensions?
-end
-OccupancyGrid{T}(num_x, num_y, start_x, start_y, cell_size) where {T<:Real} = OccupancyGrid{T}(start_x, start_y, cell_size, MMatrix{num_x, num_y, Bool}([false for i in 1:num_x*num_y]))
-
-function add_points!(og, points)
+function generate_fov_halfspaces(K, T, xrange, yrange)
     """
-    Takes in a point cloud and adds it to the OccupancyGrid.
-    
+    Generate a list of half-spaces representing the
+    boundary of the camera field of view (FOV).
+    Used to efficiently generate a safe flight corridor polyhedron.
     Args:
-        og: 2D OccupancyGrid
-        points: 3xN array of xyz points
+        K: camera matrix
+        T: 4x4 rototranslation from world frame to camera frame
+        xrange: [min, max] u in image coordinates
+        yrange: [min, max] v in image coordinates
     """
-    for col in eachcol(points)
-        # Round x, y index and adjust for 1-indexing
-        x_ind = round(Int, floor((col[1]- og.start_x) / og.cell_size)) + 1
-        y_ind = round(Int, floor((col[2] - og.start_y) / og.cell_size)) + 1
-        og.grid[x_ind, y_ind] = true
-    end
+
+    # Construct vectors along "corners" of FOV boundary, in world frame
+    upper_left, upper_right, lower_left, lower_right = generate_corner_vectors(K, T, xrange, yrange)
+    # Take cross product to get normal vectors
+    upper_n = normalize(cross(upper_left, upper_right))
+    right_n = normalize(cross(upper_right, lower_right))
+    lower_n = normalize(cross(lower_right, lower_left))
+    left_n = normalize(cross(lower_left, upper_left))
+    fov_normals = [upper_n, right_n, left_n, lower_n]
+
+    cam_origin = apply_T([0;0;0.0], inv(T))   # In world frame
+    hs = [HalfSpace(-n, -n'*cam_origin) for n in fov_normals]
+    return hs
 end
 
-function reset!(og)
+function generate_corner_vectors(K, T, xrange, yrange)
     """
-    Clear all cells of OccupancyGrid.
+    Construct normalized vectors along "corners" of FOV boundary, in world frame.
+    Args:
+        T: 4x4 rototranslation from world frame to camera frame
     """
-    for i in eachindex(og.grid)
-        og.grid[i] = false
-    end
+    K_inv = inv(K)
+    T_inv = inv(T)  # Camera frame to world frame
+    R = T_inv[1:3, 1:3]
+    upper_left = R*K_inv*[xrange[1]; yrange[2]; 1]
+    lower_left = R*K_inv*[xrange[2]; yrange[2]; 1]
+    upper_right = R*K_inv*[xrange[1]; yrange[1]; 1]
+    lower_right = R*K_inv*[xrange[2]; yrange[1]; 1]
+    return [normalize(v) for v in [upper_left, upper_right, lower_left, lower_right]]
+end
+
+function get_fov_polyhedron(K, T, xrange, yrange)
+    """
+    Return polyhedron representing the camera field of view.
+    This representation does NOT include a maximum depth;
+    i.e. it is open in the direction the camera is pointing.
+    Args:
+        K: camera matrix
+        T: 4x4 rototranslation from world frame to camera frame
+        xrange: [min, max] u in image coordinates
+        yrange: [min, max] v in image coordinates
+    """
+    hs = generate_fov_halfspaces(K, T, xrange, yrange)
+    p = polyhedron(reduce(∩, hs))
+    return p
+end
+
+function plot_fov_polyhedron!(vis, K, T, xrange, yrange)
+    hs = generate_fov_halfspaces(K, T, xrange, yrange)
+    cam_origin = apply_T([0;0;0.0], inv(T))   # In world frame
+    # Limit depth arbitrarily (for display only, as it's hard to mesh an unbounded set)
+    max_depth = 2
+    upper_left, upper_right, lower_left, lower_right = generate_corner_vectors(K, T, xrange, yrange)
+
+    # Testing only
+    upper_n = -normalize(cross(upper_left, upper_right))
+    right_n = -normalize(cross(upper_right, lower_right))
+    lower_n = -normalize(cross(lower_right, lower_left))
+    left_n = -normalize(cross(lower_left, upper_left))
+
+    upper_edge = upper_right - upper_left
+    left_edge = lower_left - upper_left
+    depth_n = normalize(cross(left_edge, upper_edge))
+    max_depth_point = cam_origin + (upper_left.*max_depth)
+    push!(hs, HalfSpace(-depth_n, -depth_n'*max_depth_point))
+    p = polyhedron(reduce(∩, hs))
+    m = Polyhedra.Mesh(p)
+    translucent_green = MeshLambertMaterial(color=RGBA(0, 1, 0, 0.5))
+    solid_red = MeshLambertMaterial(color=RGB(1, 0, 0))
+    yellow = MeshLambertMaterial(color=RGB(1, 1, 0))
+    cyan = MeshLambertMaterial(color=RGB(0, 1, 1))
+    magenta = MeshLambertMaterial(color=RGB(1, 0, 1))
+    white = MeshLambertMaterial(color=RGB(1, 1, 1))
+    setobject!(vis["camera"], Sphere(Point3f(cam_origin), 0.05), solid_red)
+    # setobject!(vis["p1"], Sphere(Point3f(cam_origin + upper_left), 0.05), yellow)
+    # setobject!(vis["p2"], Sphere(Point3f(cam_origin + upper_right), 0.05), cyan)
+    # setobject!(vis["p3"], Sphere(Point3f(cam_origin + lower_left), 0.05), magenta)
+    # setobject!(vis["p4"], Sphere(Point3f(cam_origin + lower_right), 0.05), white)
+
+    # Testing only
+    c5 = MeshLambertMaterial(color=RGB(0.5, 1, 0.5))
+    # setobject!(vis["n1"], Sphere(Point3f(cam_origin + upper_n), 0.05), yellow)
+    # setobject!(vis["n2"], Sphere(Point3f(cam_origin + right_n), 0.05), cyan)
+    # setobject!(vis["n3"], Sphere(Point3f(cam_origin + lower_n), 0.05), magenta)
+    # setobject!(vis["n4"], Sphere(Point3f(cam_origin + left_n), 0.05), white)
+    setobject!(vis["n5"], Sphere(Point3f(cam_origin - depth_n), 0.05), c5)
+    setobject!(vis["mdp"], Sphere(Point3f(max_depth_point), 0.05), c5)
+
+    setobject!(vis["fov_bounds"], m, translucent_green)
 end
