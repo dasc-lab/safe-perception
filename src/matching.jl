@@ -126,6 +126,16 @@ function get_points_3d(K, depth_map)
     return out_points
 end
 
+function get_points_3d(K, depth_map, R, t)
+    """
+    Get Vector{Point3f} of points rotated through R and translated by t
+    Not efficient.
+    """
+    pts = get_points_3d(K, depth_map)
+    transformed_pts = [R*p + t for p in pts]
+    return transformed_pts
+end
+
 # Functions for plotting / visualization
 # TOOD(rgg): put in separate file?
 
@@ -253,6 +263,7 @@ function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t
     setobject!(vis["pc"][label], pc)  
     return label
 end
+
 function remove_invalid_matches(p1, p2)
     """
     Takes in two matching 3xN matrices of 3D point correspondences. 

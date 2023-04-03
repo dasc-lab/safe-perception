@@ -1,5 +1,6 @@
 # Helper functions for building maps
 using Polyhedra
+using StaticArrays
 include("matching.jl")  # For transformation functions, move these / use library?
 
 function generate_fov_halfspaces(K, T, xrange, yrange)
@@ -22,9 +23,10 @@ function generate_fov_halfspaces(K, T, xrange, yrange)
     lower_n = normalize(cross(lower_right, lower_left))
     left_n = normalize(cross(lower_left, upper_left))
     fov_normals = [upper_n, right_n, left_n, lower_n]
+    static_fov_normals = [SVector{3}(n) for n in fov_normals] # For compatibility with other polyhedra
 
     cam_origin = apply_T([0;0;0.0], inv(T))   # In world frame
-    hs = [HalfSpace(-n, -n'*cam_origin) for n in fov_normals]
+    hs = [HalfSpace(-n, -n'*cam_origin) for n in static_fov_normals]
     return hs
 end
 
@@ -60,11 +62,20 @@ function get_fov_polyhedron(K, T, xrange, yrange)
     return p
 end
 
-function plot_fov_polyhedron!(vis, K, T, xrange, yrange)
+function plot_fov_polyhedron!(vis, K, T, xrange, yrange; max_depth=2)
+    """
+    Plots the camera location and FOV polyhedron in the provided visualizer.
+    Args:
+        vis: MeshCat visualizer object
+        K: camera matrix
+        T: 4x4 rototranslation from world frame to camera frame
+        xrange: [min, max] u in image coordinates
+        yrange: [min, max] v in image coordinates
+        max_depth: maximum depth of FOV for visualization purposes
+    """
     hs = generate_fov_halfspaces(K, T, xrange, yrange)
     cam_origin = apply_T([0;0;0.0], inv(T))   # In world frame
     # Limit depth arbitrarily (for display only, as it's hard to mesh an unbounded set)
-    max_depth = 2
     upper_left, upper_right, lower_left, lower_right = generate_corner_vectors(K, T, xrange, yrange)
 
     # Testing only
@@ -102,4 +113,26 @@ function plot_fov_polyhedron!(vis, K, T, xrange, yrange)
     setobject!(vis["mdp"], Sphere(Point3f(max_depth_point), 0.05), c5)
 
     setobject!(vis["fov_bounds"], m, translucent_green)
+end
+
+function get_obs_free_polyhedron(points, seed; ϵ=0, bbox=[5, 5, 5], dilation_radius=0.1)
+    """
+    Generate polyhedron that includes none of the given points.
+    i.e. the safe flight corridor
+    Args:
+        points: Vector of xyz points
+        seed: safe location from which to start propagating (e.g. camera position)
+        ϵ: radius of norm-ball error around points
+        bbox: bounding box for safe polyhedron (should contain field of view)
+              symmetric +-[x, y, z]
+        dilation_radius: parameter for decompUtil
+    Returns:
+        polyhedron, halfspaces
+    """
+    #obs = [Vector(c) for c in eachcol(points)]
+    # Hyperplanes: point, normal vector 
+    result = seedDecomp(seed, points, bbox, dilation_radius)
+    hs_shrunk = [Polyhedra.HalfSpace(r.n, r.n' * r.p - ϵ) for r in result]
+    p_shrunk = polyhedron(reduce(∩, hs_shrunk))
+    return p_shrunk
 end

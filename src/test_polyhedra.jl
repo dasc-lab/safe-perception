@@ -18,7 +18,7 @@ bbox = [2,2,2.]
 # define a dilation radius
 dilation_radius = 0.1
 
-# Hyperplanes: point, normal vector (not guaranteed to be collinear?)
+# Hyperplanes: point, normal vector 
 result = seedDecomp(pos, obs, bbox, dilation_radius)
 
 # Visualize
