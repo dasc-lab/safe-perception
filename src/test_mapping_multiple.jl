@@ -42,10 +42,10 @@ gtruth = readdlm(gt_path, ' ', Float64, skipstart=1)
 cal_path = joinpath(df, "calibration.txt")
 K = assemble_K_matrix(get_cal_params(cal_path)...)
 
-if !@isdefined vis
-    vis = Visualizer()  # Only need to set up once
-end
-delete!(vis)  # Clear any rendered objects
+# if !@isdefined vis
+#     vis = Visualizer()  # Only need to set up once
+# end
+# delete!(vis)  # Clear any rendered objects
 
 c̄ = 0.07  # Maximum residual of inliers
 
@@ -53,7 +53,7 @@ function plot_all()
     N = length(img_filenames)
     step = 3
     start = 9
-    stop = 81
+    stop = 27
     R_init, t_init = get_groundtruth_Rt(gtruth, depth_ts[start])
     local prev_T = get_T(R_init, t_init)
 
@@ -66,54 +66,61 @@ function plot_all()
     yrange = [0, pyconvert(Int32, curr_color.shape[0])]
     xrange = [0, pyconvert(Int32, curr_color.shape[1])]
 
-    show_pointcloud_color!(vis, curr_dimg, curr_color, K, R_init, t_init)
+    #show_pointcloud_color!(vis, curr_dimg, curr_color, K, R_init, t_init)
     for i in start:step:stop
-        @printf "Step %i of %i\n" i (N-step)
-        curr_dimg = get_depth(df, depth_filenames[i])
-        next_dimg = get_depth(df, depth_filenames[i+step])
-        curr_color = get_imgs(df, img_filenames[i])
-        next_color = get_imgs(df, img_filenames[i+step])
-        curr_gray = cv.cvtColor(curr_color, cv.COLOR_BGR2GRAY)
-        next_gray = cv.cvtColor(next_color, cv.COLOR_BGR2GRAY)
+        @printf "\n============== Step %i of %i ===============\n" i (N-step)
+        @time begin 
+            curr_dimg = get_depth(df, depth_filenames[i])
+            next_dimg = get_depth(df, depth_filenames[i+step])
+            curr_color = get_imgs(df, img_filenames[i])
+            next_color = get_imgs(df, img_filenames[i+step])
+            curr_gray = cv.cvtColor(curr_color, cv.COLOR_BGR2GRAY)
+            next_gray = cv.cvtColor(next_color, cv.COLOR_BGR2GRAY)
 
-        t_1 = depth_ts[i]
-        t_2 = depth_ts[i+step]
-        matched_pts1, matched_pts2 = get_matched_pts(curr_gray, next_gray, curr_dimg, next_dimg)
-        @time R_tls_2_1, t_tls_2_1 = PE.estimate_Rt(matched_pts2, matched_pts1;
-            method_pairing=PE.Star(),
-            method_R=PE.TLS(c̄), # TODO: fix c̄, put in the theoretically correct value based on β
-            method_t=PE.TLS(c̄)
-        )
-        T_tls_2_1 = get_T(R_tls_2_1, t_tls_2_1)
-        R_gt_2_1, t_gt_2_1 = get_groundtruth_Rt(gtruth, t_2, t_1)
-        T_gt_2_1 = get_T(R_gt_2_1, t_gt_2_1)
-        #@show norm(T_gt_2_1 - T_tls_2_1)
-        T_gt_2_w = get_T(get_groundtruth_Rt(gtruth, t_2)...)
-        prev_T = prev_T * T_tls_2_1
-        #@show norm(prev_T - T_gt_2_w)
+            t_1 = depth_ts[i]
+            t_2 = depth_ts[i+step]
+            @printf "Finding correspondences"
+            @time matched_pts1, matched_pts2 = get_matched_pts(curr_gray, next_gray, curr_dimg, next_dimg)
+            @printf "Estimating R, t with TLS"
+            @time R_tls_2_1, t_tls_2_1 = PE.estimate_Rt(matched_pts2, matched_pts1;
+                method_pairing=PE.Star(),
+                method_R=PE.TLS(c̄), # TODO: fix c̄, put in the theoretically correct value based on β
+                method_t=PE.TLS(c̄)
+            )
+            T_tls_2_1 = get_T(R_tls_2_1, t_tls_2_1)
+            R_gt_2_1, t_gt_2_1 = get_groundtruth_Rt(gtruth, t_2, t_1)
+            T_gt_2_1 = get_T(R_gt_2_1, t_gt_2_1)
+            #@show norm(T_gt_2_1 - T_tls_2_1)
+            T_gt_2_w = get_T(get_groundtruth_Rt(gtruth, t_2)...)
+            prev_T = prev_T * T_tls_2_1
+            #@show norm(prev_T - T_gt_2_w)
 
-        # Calculate error bounds for relative transformation (not cumulative)
-        # Inlier noise, related to choice of ̄c. See TEASER paper.
-        β = 0.005  # TODO(rgg): refine this value and ̄c
-        # Estimate error on TLS
-        @time ϵR, ϵt = PE.est_err_bounds(matched_pts1, matched_pts2, β, iterations=1000)
-        @show ϵR, ϵt
+            # Calculate error bounds for relative transformation (not cumulative)
+            # Inlier noise, related to choice of ̄c. See TEASER paper.
+            β = 0.005  # TODO(rgg): refine this value and ̄c
+            # Estimate error on TLS
+            @printf "Estimating error bounds with max clique and sampling\n"
+            @time ϵR, ϵt = PE.est_err_bounds(matched_pts1, matched_pts2, β, iterations=1000)
+            @show ϵR, ϵt
 
-        R, t = extract_R_t(prev_T)
-        show_pointcloud_color!(vis, next_dimg, next_color, K, R, t)
-        seed = apply_T([0; 0; 0.0], prev_T)
-        obs_points = get_points_3d(K, next_dimg, R, t)
-        # TODO(rgg): add norm ball errors
-        translucent_purple = MeshLambertMaterial(color=RGBA(0.5, 0, 0.5, 0.5))
-        translucent_red = MeshLambertMaterial(color=RGBA(1, 0, 0, 0.5))
-        obs_poly = get_obs_free_polyhedron(obs_points, seed, bbox=[3, 3, 3])
-        fov_poly = get_fov_polyhedron(K, T, xrange, yrange)
-        safe_poly = intersect(fov_poly, obs_poly)
-        safe_poly_mesh = Polyhedra.Mesh(safe_poly)
-        #setobject!(vis["safe_poly"], safe_poly_mesh, translucent_red)
-        obs_poly_mesh = Polyhedra.Mesh(obs_poly)
-        plot_fov_polyhedron!(vis, K, inv(prev_T), xrange, yrange, max_depth=3)
-        setobject!(vis["obs_poly"], obs_poly_mesh, translucent_purple)
+            R, t = extract_R_t(prev_T)
+            seed = apply_T([0; 0; 0.0], prev_T)
+            @printf "Reprojecting depth image and transforming"
+            @time obs_points = get_points_3d(K, next_dimg, R, t)
+            # TODO(rgg): add norm ball errors
+            translucent_purple = MeshLambertMaterial(color=RGBA(0.5, 0, 0.5, 0.5))
+            translucent_red = MeshLambertMaterial(color=RGBA(1, 0, 0, 0.5))
+            obs_poly = get_obs_free_polyhedron(obs_points, seed, bbox=[3, 3, 3])
+            fov_poly = get_fov_polyhedron(K, inv(prev_T), xrange, yrange)
+            #safe_poly = intersect(fov_poly, obs_poly)
+            #safe_poly_mesh = Polyhedra.Mesh(safe_poly)
+            #obs_poly_mesh = Polyhedra.Mesh(obs_poly)
+
+            #show_pointcloud_color!(vis, next_dimg, next_color, K, R, t)
+            #setobject!(vis["safe_poly"], safe_poly_mesh, translucent_red)
+            #plot_fov_polyhedron!(vis, K, inv(prev_T), xrange, yrange, max_depth=3)
+            #setobject!(vis["obs_poly"], obs_poly_mesh, translucent_purple)
+        end
     end
 end
 
