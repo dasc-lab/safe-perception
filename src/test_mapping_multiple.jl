@@ -79,7 +79,7 @@ function plot_all()
 
             t_1 = depth_ts[i]
             t_2 = depth_ts[i+step]
-            @printf "Finding correspondences"
+            @printf "Finding correspondences\n"
             @time matched_pts1, matched_pts2 = get_matched_pts(curr_gray, next_gray, curr_dimg, next_dimg)
             @printf "Estimating R, t with TLS"
             @time R_tls_2_1, t_tls_2_1 = PE.estimate_Rt(matched_pts2, matched_pts1;

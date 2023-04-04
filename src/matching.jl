@@ -6,13 +6,19 @@ using PythonCall, GeometryBasics, LinearAlgebra
 using ColorTypes, MeshCat
 using UUIDs
 using Logging, Printf
+debug_logger = Logging.ConsoleLogger(Logging.Info)
 
 Point3f = Point3f0  # For newer versions of GeometryBasics
 cv = pyimport("cv2")
 np = pyimport("numpy")
 py = pybuiltins
 
-function get_matches(img1, img2, detector_type::String="orb", nfeatures=1000)
+SM4{F} = SMatrix{4, 4, F}
+SM3{F} = SMatrix{3, 3, F}
+SV2{F} = SVector{2, F}
+SV3{F} = SVector{3, F}
+
+function get_matches(img1, img2, detector_type::String="orb", nfeatures=1000, use_flann=true)
     """
     Get matches between two grayscale images.
 
@@ -50,16 +56,39 @@ function get_matches(img1, img2, detector_type::String="orb", nfeatures=1000)
     end
 
     # Find the keypoints and descriptors.
-    kp1, des1 = detector.detectAndCompute(img1, py.None)
-    kp2, des2 = detector.detectAndCompute(img2, py.None)
+    @info "Finding keypoints"
+    @time begin
+        kp1, des1 = detector.detectAndCompute(img1, py.None)
+        kp2, des2 = detector.detectAndCompute(img2, py.None)
+    end
     
-    # TODO(rgg): support FLANN, see https://docs.opencv.org/4.x/dc/dc3/tutorial_py_matcher.html
-    # Create BFMatcher object. Hamming distance for ORB, L2 for SIFT/SURF.
-    bf = cv.BFMatcher(feature_norm, crossCheck=true)
-    # Match descriptors.
-    matches = bf.match(des1,des2)
-    # Sort them in the order of their distance.
-    matches = py.sorted(matches, key = x -> x.distance)
+    # See https://docs.opencv.org/4.x/dc/dc3/tutorial_py_matcher.html for details
+    # FLANN tuned for ORB
+    if use_flann
+        FLANN_INDEX_LSH = 6
+        index_params = py.dict(algorithm = FLANN_INDEX_LSH,
+                            table_number = 6, # 12 recommended by docs
+                            key_size = 12,     # 20
+                            multi_probe_level = 1) # 2
+        search_params = py.dict(checks=50)   # or pass empty dictionary
+        flann = cv.FlannBasedMatcher(index_params,search_params)
+        @info "Matching keypoints with FLANN"
+        @time all_matches = flann.knnMatch(des1,des2,k=2)  # Get two nearest neighbors for ratio test
+        # Ratio test as per Lowe's paper
+        matches = py.list()  # TODO(rgg): make this a Julia vector?
+        for (m, n) in all_matches
+            if pyconvert(Bool, m.distance < 0.7*n.distance)
+                matches.append(m)
+            end
+        end
+    else
+        # Create BFMatcher object. Hamming distance for ORB, L2 for SIFT/SURF.
+        bf = cv.BFMatcher(feature_norm, crossCheck=true)
+        # Match descriptors.
+        matches = bf.match(des1,des2)
+    end
+    # Sort matches in the order of their distance--not needed downstream?
+    #matches = py.sorted(matches, key = x -> x.distance)
     n_matches = pyconvert(Int, py.len(matches))
     if n_matches < 200
         @warn "Low matched feature count across frames: " n_matches
@@ -68,7 +97,7 @@ function get_matches(img1, img2, detector_type::String="orb", nfeatures=1000)
     return kp1, kp2, matches
 end
 
-function get_point_3d(K_inv::Matrix{Float64}, point, depth)
+function get_point_3d(K_inv::SM3{Float32}, point::Tuple{Int, Int}, depth::Real)
     """
     Takes a point in u,v and returns a point in x, y, z using the inverse
     camera intrinsics matrix and the known depth (z) of the point.
@@ -80,7 +109,7 @@ function get_point_3d(K_inv::Matrix{Float64}, point, depth)
     Returns: Point3f from GeometryBasics
     """
     point_3d = K_inv * [point...; 1] * depth
-    return Point3f(point_3d)
+    return point_3d 
 end
 
 function get_points_3d(K, points, depth_map)
@@ -112,18 +141,22 @@ function get_points_3d(K, points, depth_map)
 end
 
 function get_points_3d(K, depth_map)
-    K_inv = inv(K)
-    out_points = Point3f[]
+    K_inv = SM3{Float32}(inv(K))
+    out_points = zeros(SV3{Float32}, length(depth_map))
+    curr_ind = 1
+    tol = eps()
     c_inds = CartesianIndices(depth_map)
     for i in c_inds
-        v, u = Tuple(i)  # u, v map to x, y; but indexing is [y][x]
-        pt_3d = get_point_3d(K_inv, (u, v), depth_map[i])
-        # Invalid returns will be exactly at the origin, remove
-        if norm(pt_3d) > eps()
-            push!(out_points, pt_3d)
+        d = depth_map[i]
+        # Invalid depth returns will be exactly at the origin, skip
+        if abs(d) > tol
+            v, u = Tuple(i)  # u, v map to x, y; but indexing is [y][x]
+            pt_3d = get_point_3d(K_inv, (u, v), d)
+            out_points[curr_ind] = pt_3d
+            curr_ind += 1
         end
     end
-    return out_points
+    return view(out_points, 1:curr_ind-1)
 end
 
 function get_points_3d(K, depth_map, R, t)
@@ -243,7 +276,7 @@ function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t
     """
     colors = Colorant[]
     points = Point3f[]
-    K_inv = inv(K)
+    K_inv = SM4(inv(K))
     u_max = pyconvert(Int32, np.shape(img_color)[1])
     v_max = pyconvert(Int32, np.shape(img_color)[0])
     for v in 1:v_max
@@ -284,7 +317,7 @@ function remove_invalid_matches(p1, p2)
 end
 
 # Apply rototranslation to frame 1 3d keypoints
-function apply_Rt(pts, R, t)
+function apply_Rt(pts, R::SM3{Real}, t::SV3{Real})
     """
     Applies rototranslation to 3D points.
     Args:
@@ -302,7 +335,7 @@ function apply_Rt(pts, R, t)
     return out
 end
 
-function apply_T(pts, T)
+function apply_T(pts, T::SM4{Real})
     """
     Applies rototranslation to 3D points.
     Args:
