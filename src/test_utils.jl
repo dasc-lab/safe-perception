@@ -43,7 +43,7 @@ end
 
 function extract_R_t(T)
     # Takes in 4x4 rototranslation and return 3x3 R, 3x1 t
-    return T[1:3, 1:3], T[1:3, 4]
+    return SM3{Float32}(T[1:3, 1:3]), SV3(T[1:3, 4])
 end
 
 function get_groundtruth_Rt(gtruth, time1)
@@ -64,8 +64,7 @@ function get_groundtruth_Rt(gtruth, time1)
 end
 
 function get_T(R, t)
-    T = [R t; 0 0 0 1]
-    return T
+    return SM4{Float32}([R t; 0 0 0 1])
 end
 
 function get_depth(data_folder, dimg_name)
@@ -116,6 +115,7 @@ function get_matched_pts(img1, img2, depth1, depth2)
     end
     # Finally, clean correspondence list of any pairs that contain either point at the origin (invalid depth)
     matched_pts1, matched_pts2 = remove_invalid_matches(matched_pts1, matched_pts2)
+    @info "Matching and cleaning complete"
     return matched_pts1, matched_pts2
 end
 

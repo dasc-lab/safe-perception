@@ -20,14 +20,14 @@ Integrated test to visualize safe flight corridors computed on
 point clouds with TLS rototranslation.
 """
 # Tested with plant_4, mannequin_face_1, sofa_2, plant_scene_2
-df = joinpath("/root/datasets/training/sofa_2/")
+const df = joinpath("/root/datasets/training/sofa_2/")
 
 # Read in images
-ground_truth = readdlm(joinpath(df, "groundtruth.txt"), skipstart=1);
-depth_filenames = readdlm(joinpath(df, "depth.txt"));
-depth_ts = depth_filenames[:,1]
-depth_filenames = depth_filenames[:,2]  # Remove other columns for convenience
-img_filenames = [joinpath("rgb", f) for f in readdir(joinpath(df, "rgb"))]
+const ground_truth = readdlm(joinpath(df, "groundtruth.txt"), skipstart=1);
+const depth_info = readdlm(joinpath(df, "depth.txt"));
+const depth_ts = depth_info[:,1]
+const depth_filenames = depth_info[:,2]  # Remove other columns for convenience
+const img_filenames = [joinpath("rgb", f) for f in readdir(joinpath(df, "rgb"))]
 
 #dimgs = [get_depth(df, n) for n in depth_filenames[:,2]]
 #imgs_color = [get_imgs(df, n) for n in img_filenames]
@@ -35,19 +35,19 @@ img_filenames = [joinpath("rgb", f) for f in readdir(joinpath(df, "rgb"))]
 
 # Read in groundtruth
 # Columns: timestamp tx ty tz qx qy qz qw
-gt_path = joinpath(df, "groundtruth.txt")
-gtruth = readdlm(gt_path, ' ', Float64, skipstart=1)
+const gt_path = joinpath(df, "groundtruth.txt")
+const gtruth = readdlm(gt_path, ' ', Float64, skipstart=1)
 
 # Read in camera intrinsics matrix
-cal_path = joinpath(df, "calibration.txt")
-K = assemble_K_matrix(get_cal_params(cal_path)...)
+const cal_path = joinpath(df, "calibration.txt")
+const K = SM3{Float32}(assemble_K_matrix(get_cal_params(cal_path)...))
 
 # if !@isdefined vis
 #     vis = Visualizer()  # Only need to set up once
 # end
 # delete!(vis)  # Clear any rendered objects
 
-c̄ = 0.07  # Maximum residual of inliers
+const c̄ = 0.07  # Maximum residual of inliers
 
 function plot_all()
     N = length(img_filenames)
@@ -110,7 +110,8 @@ function plot_all()
             # TODO(rgg): add norm ball errors
             translucent_purple = MeshLambertMaterial(color=RGBA(0.5, 0, 0.5, 0.5))
             translucent_red = MeshLambertMaterial(color=RGBA(1, 0, 0, 0.5))
-            obs_poly = get_obs_free_polyhedron(obs_points, seed, bbox=[3, 3, 3])
+            @printf "Getting obstacle-free polyhedron with DecompUtil\n"
+            @time obs_poly = get_obs_free_polyhedron(obs_points, seed, bbox=[3, 3, 3])
             fov_poly = get_fov_polyhedron(K, inv(prev_T), xrange, yrange)
             #safe_poly = intersect(fov_poly, obs_poly)
             #safe_poly_mesh = Polyhedra.Mesh(safe_poly)

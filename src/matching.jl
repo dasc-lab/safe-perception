@@ -2,7 +2,7 @@
 ENV["JULIA_CONDAPKG_BACKEND"] = "Null"
 ENV["JULIA_PYTHONCALL_EXE"] = "/usr/bin/python3"
 
-using PythonCall, GeometryBasics, LinearAlgebra
+using PythonCall, GeometryBasics, LinearAlgebra, StaticArrays
 using ColorTypes, MeshCat
 using UUIDs
 using Logging, Printf
@@ -13,8 +13,8 @@ cv = pyimport("cv2")
 np = pyimport("numpy")
 py = pybuiltins
 
-SM4{F} = SMatrix{4, 4, F}
-SM3{F} = SMatrix{3, 3, F}
+SM4{F} = SMatrix{4, 4, F, 16}
+SM3{F} = SMatrix{3, 3, F, 9}
 SV2{F} = SVector{2, F}
 SV3{F} = SVector{3, F}
 
@@ -97,7 +97,7 @@ function get_matches(img1, img2, detector_type::String="orb", nfeatures=1000, us
     return kp1, kp2, matches
 end
 
-function get_point_3d(K_inv::SM3{Float32}, point::Tuple{Int, Int}, depth::Real)
+function get_point_3d(K_inv::SM3{Float32}, point::Tuple{Real, Real}, depth::Real)
     """
     Takes a point in u,v and returns a point in x, y, z using the inverse
     camera intrinsics matrix and the known depth (z) of the point.
@@ -106,10 +106,9 @@ function get_point_3d(K_inv::SM3{Float32}, point::Tuple{Int, Int}, depth::Real)
         K_inv: inverse camera intrinsics matrix
         point: in image frame
         depth: depth associated with the given pixel
-    Returns: Point3f from GeometryBasics
+    Returns: SVector{3}
     """
-    point_3d = K_inv * [point...; 1] * depth
-    return point_3d 
+    return K_inv * [point...; 1] * depth
 end
 
 function get_points_3d(K, points, depth_map)
@@ -123,16 +122,16 @@ function get_points_3d(K, points, depth_map)
     Returns:
         Vector{Point3f}
     """
-    K_inv = inv(K)
+    K_inv = SM3{Float32}(inv(K))
     n_pts = size(points, 2)
-    out_points = Point3f[]
+    out_points = SV3[]
     for i in 1:n_pts
         point = points[:, i]
         # Round for indexing into the depth map. Note that keypoints are Float64,
         # even though the image is composed of discrete pixels. Not sure if this
         # is the best way to reproject given the limitations of the depth map.
         u_ind, v_ind = round.(Int, point)
-        pt_3d = get_point_3d(K_inv, point, depth_map[v_ind, u_ind])
+        pt_3d = get_point_3d(K_inv, Tuple(point), depth_map[v_ind, u_ind])
         # Some will be projected to the origin (invalid depth)
         # We keep these in the output to match the input
         push!(out_points, pt_3d)
@@ -335,7 +334,7 @@ function apply_Rt(pts, R::SM3{Real}, t::SV3{Real})
     return out
 end
 
-function apply_T(pts, T::SM4{Real})
+function apply_T(pts, T::SM4)
     """
     Applies rototranslation to 3D points.
     Args:

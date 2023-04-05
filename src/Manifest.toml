@@ -469,7 +469,7 @@ version = "2.74.0+2"
 deps = ["Printf"]
 git-tree-sha1 = "1a863e7e0988cce1d21e7c2af089091adc282921"
 repo-rev = "main"
-repo-url = "https://github.com/dev10110/GraduatedNonConvexity.jl#main"
+repo-url = "https://github.com/dev10110/GraduatedNonConvexity.jl"
 uuid = "8729bc32-1559-4998-b075-cda57b45b1d8"
 version = "0.1.0"
 

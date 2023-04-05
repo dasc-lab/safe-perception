@@ -1,9 +1,9 @@
 # Helper functions for building maps
 using Polyhedra
 using StaticArrays
-include("matching.jl")  # For transformation functions, move these / use library?
+include("matching.jl")  # For transformation functions and types, move these / use library?
 
-function generate_fov_halfspaces(K, T, xrange, yrange)
+function generate_fov_halfspaces(K::SM3{Float32}, T::SM4{Float32}, xrange::Vector{Int}, yrange::Vector{Int})
     """
     Generate a list of half-spaces representing the
     boundary of the camera field of view (FOV).
@@ -23,14 +23,14 @@ function generate_fov_halfspaces(K, T, xrange, yrange)
     lower_n = normalize(cross(lower_right, lower_left))
     left_n = normalize(cross(lower_left, upper_left))
     fov_normals = [upper_n, right_n, left_n, lower_n]
-    static_fov_normals = [SVector{3}(n) for n in fov_normals] # For compatibility with other polyhedra
+    static_fov_normals = [SV3{Float32}(n) for n in fov_normals] # For compatibility with other polyhedra
 
     cam_origin = apply_T([0;0;0.0], inv(T))   # In world frame
     hs = [HalfSpace(-n, -n'*cam_origin) for n in static_fov_normals]
     return hs
 end
 
-function generate_corner_vectors(K, T, xrange, yrange)
+function generate_corner_vectors(K::SM3{Float32}, T::SM4{Float32}, xrange::Vector{Int}, yrange::Vector{Int})
     """
     Construct normalized vectors along "corners" of FOV boundary, in world frame.
     Args:
@@ -131,6 +131,7 @@ function get_obs_free_polyhedron(points, seed; ϵ=0, bbox=[5, 5, 5], dilation_ra
     """
     #obs = [Vector(c) for c in eachcol(points)]
     # Hyperplanes: point, normal vector 
+    @info @sprintf("Running decomputil on %i points", length(points))
     result = seedDecomp(seed, points, bbox, dilation_radius)
     hs_shrunk = [Polyhedra.HalfSpace(r.n, r.n' * r.p - ϵ) for r in result]
     p_shrunk = polyhedron(reduce(∩, hs_shrunk))

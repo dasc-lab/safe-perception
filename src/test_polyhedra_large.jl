@@ -3,6 +3,7 @@ using LinearAlgebra
 using Rotations
 using DecompUtil
 using ColorTypes, MeshCat
+using BenchmarkTools
 
 # seed from which the decomposition starts
 pos1 = [0.5,0.5,0.5] 
@@ -13,7 +14,7 @@ r1 = 0.7
 r2 = 1.5
 center1 = [1,0.5,0.5]
 center2 = [-1,0,0.]
-N = 200000
+N = 300000
 d = 7  # side length of random cube to generate points in
 rand_pts = [d*rand(3) .- d/2 for i in 1:N]
 obs = [p for p in rand_pts if (norm(p-center1) > r1) && (norm(p-center2) > r2)]
@@ -26,8 +27,8 @@ bbox = [2,2,2.]
 dilation_radius = 0.1
 
 # Hyperplanes: point, normal vector (not guaranteed to be collinear?)
-result1 = seedDecomp(pos1, obs, bbox, dilation_radius)
-result2 = seedDecomp(pos2, obs, bbox, dilation_radius)
+@btime result1 = seedDecomp(pos1, obs, bbox, dilation_radius)
+@btime result2 = seedDecomp(pos2, obs, bbox, dilation_radius)
 
 # Visualize
 if !@isdefined vis
