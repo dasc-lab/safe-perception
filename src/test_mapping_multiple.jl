@@ -112,7 +112,8 @@ function plot_all()
             translucent_red = MeshLambertMaterial(color=RGBA(1, 0, 0, 0.5))
             @printf "Getting obstacle-free polyhedron with DecompUtil\n"
             @time obs_poly = get_obs_free_polyhedron(obs_points_camera_frame, seed, T=inv(prev_T), bbox=[3, 3, 3])
-            fov_poly = get_fov_polyhedron(K, inv(prev_T), xrange, yrange)
+            @printf "Getting FOV poly\n"
+            @time fov_poly = get_fov_polyhedron(K, inv(prev_T), xrange, yrange)
             #safe_poly = intersect(fov_poly, obs_poly)
             #safe_poly_mesh = Polyhedra.Mesh(safe_poly)
             #obs_poly_mesh = Polyhedra.Mesh(obs_poly)

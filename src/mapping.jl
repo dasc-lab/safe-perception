@@ -30,7 +30,7 @@ function generate_fov_halfspaces(K::SM3{Float32}, T::SM4{Float32}, xrange::Vecto
     return hs
 end
 
-function generate_corner_vectors(K::SM3{Float32}, T::SM4{Float32}, xrange::Vector{Int}, yrange::Vector{Int})
+function generate_corner_vectors(K::SM3{Float32}, T::SM4{Float32}, xrange, yrange)
     """
     Construct normalized vectors along "corners" of FOV boundary, in world frame.
     Args:
@@ -39,12 +39,13 @@ function generate_corner_vectors(K::SM3{Float32}, T::SM4{Float32}, xrange::Vecto
     K_inv = inv(K)
     T_inv = inv(T)  # Camera frame to world frame
     R = T_inv[1:3, 1:3]
-    upper_left = R*K_inv*[xrange[1]; yrange[2]; 1]
-    lower_left = R*K_inv*[xrange[2]; yrange[2]; 1]
-    upper_right = R*K_inv*[xrange[1]; yrange[1]; 1]
-    lower_right = R*K_inv*[xrange[2]; yrange[1]; 1]
-    return [normalize(v) for v in [upper_left, upper_right, lower_left, lower_right]]
+    upper_left = R*K_inv*SVector(xrange[1], yrange[2], 1)
+    lower_left = R*K_inv*SVector(xrange[2], yrange[2], 1)
+    upper_right = R*K_inv*SVector(xrange[1], yrange[1], 1)
+    lower_right = R*K_inv*SVector(xrange[2], yrange[1], 1)
+    return [normalize(v) for v in (upper_left, upper_right, lower_left, lower_right)]
 end
+
 
 function get_fov_polyhedron(K, T, xrange, yrange)
     """

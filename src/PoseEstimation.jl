@@ -10,6 +10,7 @@ debug_logger = Logging.ConsoleLogger(Logging.Info)
 
 SV3{F} = SVector{3,F}
 SV4{F} = SVector{4,F}
+SM3{F} = SMatrix{3,3,F,9}
 Quaternion{F} = SVector{4,F}  # x y z w
 
 function rotdist(R1, R2)
@@ -163,7 +164,7 @@ R^* = min sum_{i=1}^N w_i ||b_i - R a_i||^2
 
 in closed form
 """
-function _estimate_R(a::AF, b::AF, w=ones(F, size(a, 2))) where {F, AF <: AbstractArray{F}}
+function _estimate_R(a::AF, b::AF, w=ones(F, size(a, 2)))::SM3{Float32} where {F, AF <: AbstractArray{F}}
     """
     method: cast the problem in quaternions
     write the problem as min q^T Q q such that ||q|| = 1
