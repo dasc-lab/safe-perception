@@ -115,13 +115,14 @@ function plot_fov_polyhedron!(vis, K, T, xrange, yrange; max_depth=2)
     setobject!(vis["fov_bounds"], m, translucent_green)
 end
 
-function get_obs_free_polyhedron(points, seed; ϵ=0, bbox=[5, 5, 5], dilation_radius=0.1)
+function get_obs_free_polyhedron(points, seed; T=SM4(I(4))::SM4{Float32}, ϵ=0, bbox=[5, 5, 5], dilation_radius=0.1)
     """
     Generate polyhedron that includes none of the given points.
     i.e. the safe flight corridor
     Args:
         points: Vector of xyz points
         seed: safe location from which to start propagating (e.g. camera position)
+        T: 4x4 transformation from world frame to camera frame
         ϵ: radius of norm-ball error around points
         bbox: bounding box for safe polyhedron (should contain field of view)
               symmetric +-[x, y, z]
@@ -132,8 +133,12 @@ function get_obs_free_polyhedron(points, seed; ϵ=0, bbox=[5, 5, 5], dilation_ra
     #obs = [Vector(c) for c in eachcol(points)]
     # Hyperplanes: point, normal vector 
     @info @sprintf("Running decomputil on %i points", length(points))
-    result = seedDecomp(seed, points, bbox, dilation_radius)
-    hs_shrunk = [Polyhedra.HalfSpace(r.n, r.n' * r.p - ϵ) for r in result]
+    result = seedDecomp_3D_fast(seed, points[1,:], points[2,:], points[3,:], bbox, dilation_radius)
+    T_inv = inv(T)  # Camera frame to world frame
+    normals_w = [(T_inv * [r.n; 1])[1:3] for r in result]
+    points_w = [(T_inv * [r.p; 1])[1:3] for r in result]
+    result_w = zip(normals_w, points_w)
+    hs_shrunk = [Polyhedra.HalfSpace(n, n' * p - ϵ) for (n,p) in result_w]
     p_shrunk = polyhedron(reduce(∩, hs_shrunk))
     return p_shrunk
 end

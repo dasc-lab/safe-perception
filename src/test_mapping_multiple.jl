@@ -106,12 +106,12 @@ function plot_all()
             R, t = extract_R_t(prev_T)
             seed = apply_T([0; 0; 0.0], prev_T)
             @printf "Reprojecting depth image and transforming"
-            @time obs_points = get_points_3d(K, next_dimg, R, t)
+            @time obs_points_camera_frame = get_points_3d(K, next_dimg)
             # TODO(rgg): add norm ball errors
             translucent_purple = MeshLambertMaterial(color=RGBA(0.5, 0, 0.5, 0.5))
             translucent_red = MeshLambertMaterial(color=RGBA(1, 0, 0, 0.5))
             @printf "Getting obstacle-free polyhedron with DecompUtil\n"
-            @time obs_poly = get_obs_free_polyhedron(obs_points, seed, bbox=[3, 3, 3])
+            @time obs_poly = get_obs_free_polyhedron(obs_points_camera_frame, seed, T=inv(prev_T), bbox=[3, 3, 3])
             fov_poly = get_fov_polyhedron(K, inv(prev_T), xrange, yrange)
             #safe_poly = intersect(fov_poly, obs_poly)
             #safe_poly_mesh = Polyhedra.Mesh(safe_poly)

@@ -1,6 +1,7 @@
 using BenchmarkTools, Logging, Printf
 using Rotations
 using DecompUtil
+using Polyhedra
 using ColorTypes, MeshCat
 
 # seed from which the decomposition starts

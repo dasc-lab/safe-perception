@@ -120,7 +120,7 @@ function get_points_3d(K, points, depth_map)
         points: 2 x n array of points [u; v] to reproject
         depth_map: depth map for entire image
     Returns:
-        Vector{Point3f}
+        Vector{SVector{3, Float32}}
     """
     K_inv = SM3{Float32}(inv(K))
     n_pts = size(points, 2)
@@ -140,31 +140,36 @@ function get_points_3d(K, points, depth_map)
 end
 
 function get_points_3d(K, depth_map)
-    K_inv = SM3{Float32}(inv(K))
-    out_points = zeros(SV3{Float32}, length(depth_map))
-    curr_ind = 1
+    """
+    Reproject all points in depth image to 3D.
+    Returns:
+        SMatrix{3, N, Float32}
+    """
+    K_inv = inv(SM3{Float32}(K))  # StaticArrays has special inverse ops for 3x3 matrices that might be faster
+    N = prod(size(depth_map))
+    UVD = Matrix{Float32}(undef, 3, N)
     tol = eps()
-    c_inds = CartesianIndices(depth_map)
-    for i in c_inds
+    ind = 1
+    for i in CartesianIndices(depth_map)
         d = depth_map[i]
-        # Invalid depth returns will be exactly at the origin, skip
-        if abs(d) > tol
-            v, u = Tuple(i)  # u, v map to x, y; but indexing is [y][x]
-            pt_3d = get_point_3d(K_inv, (u, v), d)
-            out_points[curr_ind] = pt_3d
-            curr_ind += 1
+        if abs(d) > tol  # invalid depth returns are mapped to the origin
+            # u, v map to x, y; but cartesian indexing is [y][x]
+            UVD[1, ind] = i[2] * d
+            UVD[2, ind] = i[1] * d
+            UVD[3, ind] = d
+            ind += 1
         end
     end
-    return view(out_points, 1:curr_ind-1)
+    return K_inv * UVD[:, 1:ind-1]
 end
 
 function get_points_3d(K, depth_map, R, t)
     """
-    Get Vector{Point3f} of points rotated through R and translated by t
+    Get Vector{SVector{3, Float32}} of points rotated through R and translated by t
     Not efficient.
     """
     pts = get_points_3d(K, depth_map)
-    transformed_pts = [R*p + t for p in pts]
+    transformed_pts = [R*p + t for p in eachcol(pts)]
     return transformed_pts
 end
 

@@ -240,7 +240,7 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 
 [[deps.DecompUtil]]
 deps = ["DecompUtil_jll", "LinearAlgebra", "StaticArrays"]
-git-tree-sha1 = "d960070f72d5bd5cb98ab9cb6b3e90b630849873"
+git-tree-sha1 = "11b2af0cc83e45870f6ebd5c48c75b3b7ac4a2c9"
 repo-rev = "main"
 repo-url = "http://github.com/dev10110/DecompUtil.jl"
 uuid = "a6e39b05-4154-4474-92cb-6e6881149f60"
