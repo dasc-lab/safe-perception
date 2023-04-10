@@ -88,10 +88,10 @@ function plot_all()
                 method_t=PE.TLS(c̄)
             )
             T_tls_2_1 = get_T(R_tls_2_1, t_tls_2_1)
-            R_gt_2_1, t_gt_2_1 = get_groundtruth_Rt(gtruth, t_2, t_1)
-            T_gt_2_1 = get_T(R_gt_2_1, t_gt_2_1)
+            #R_gt_2_1, t_gt_2_1 = get_groundtruth_Rt(gtruth, t_2, t_1)
+            #T_gt_2_1 = get_T(R_gt_2_1, t_gt_2_1)
             #@show norm(T_gt_2_1 - T_tls_2_1)
-            T_gt_2_w = get_T(get_groundtruth_Rt(gtruth, t_2)...)
+            #T_gt_2_w = get_T(get_groundtruth_Rt(gtruth, t_2)...)
             prev_T = prev_T * T_tls_2_1
             #@show norm(prev_T - T_gt_2_w)
 

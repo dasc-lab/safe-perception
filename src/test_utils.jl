@@ -94,13 +94,20 @@ function get_matched_pts(img1, img2, depth1, depth2)
     kp1, kp2, matches = get_matches(img1, img2, "orb")
     # PoseEstimation expects two 3xN matrices
     # First, get keypoint lists in 3d
-    p1 = np.column_stack([kp.pt for kp in kp1])  
-    p1 = pyconvert(Matrix{Float64}, p1)
-    p1_3d = get_points_3d(K, p1, depth1)
+    N_kp1 = length(kp1)
+    N_kp2 = length(kp2)
 
-    p2 = np.column_stack([kp.pt for kp in kp2])
-    p2 = pyconvert(Matrix{Float64}, p2)
-    p2_3d = get_points_3d(K, p2, depth2)
+    p1_jl = Matrix{Float32}(undef, 2, N_kp1)
+    for (i, kp) in enumerate(kp1)
+        p1_jl[:, i] = pyconvert(Vector{Float64}, kp.pt)
+    end
+    p1_3d = get_points_3d(K, p1_jl, depth1)
+
+    p2_jl = Matrix{Float32}(undef, 2, N_kp2)
+    for (i, kp) in enumerate(kp2)
+        p2_jl[:, i] = pyconvert(Vector{Float64}, kp.pt)
+    end
+    p2_3d = get_points_3d(K, p2_jl, depth2)
 
     # Then, assemble corresponding matrices of points from matches
     n_matches = pyconvert(Int32, py.len(matches))
