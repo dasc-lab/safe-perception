@@ -129,11 +129,8 @@ function Ω2(q::SV3)
 end
 
 function quat_to_rot(q::Quaternion{F}) where {F}
-    
     R̂ = Ω1(q) * Ω2(quatinv(q))
-    
     R = R̂[1:3, 1:3]
-    
     return SMatrix{3,3,F,9}(R)
 end
 
@@ -164,28 +161,36 @@ R^* = min sum_{i=1}^N w_i ||b_i - R a_i||^2
 
 in closed form
 """
-function _estimate_R(a::AF, b::AF, w=ones(F, size(a, 2)))::SM3{Float32} where {F, AF <: AbstractArray{F}}
+function _estimate_R(a::AF, b::AF, w=ones(F, size(a, 2)))::SM3{F} where {F, AF <: AbstractArray{F}}
     """
     method: cast the problem in quaternions
     write the problem as min q^T Q q such that ||q|| = 1
     notice the problem is an eigenvector problem
     return eigenvector with smallest eigenvalue
     """
-    
     @assert size(a) == size(b)
     N = size(a, 2)
     @assert length(w) == N
-    
     Q = construct_Q(N, a, b, w)
-    
     # get min eigenvector 
     q = eigvecs(Q)[:,1] |> real |> Quaternion{F} 
-
     # convert to rotation matrix
     R = quat_to_rot(q)
-    
     return R
-    
+end
+
+function _estimate_R!(R, a::AF, b::AF, w=ones(F, size(a, 2))) where {F, AF <: AbstractArray{F}}
+    """
+    In-place version of estimate_R.
+    """
+    @assert size(a) == size(b)
+    N = size(a, 2)
+    @assert length(w) == N
+    Q = construct_Q(N, a, b, w)
+    # get min eigenvector 
+    q = eigvecs(Q)[:,1] |> real |> Quaternion{F} 
+    # convert to rotation matrix
+    R = quat_to_rot(q)
 end
 
 """
@@ -199,13 +204,31 @@ in closed form
 
 """
 function _estimate_t(s, w=ones(size(s,2)))
-    
     D, N = size(s) # t \in R^D, and there are N points to match
-    
     P = sum(w)*I(D)
     q = sum(w[i] * s[:, i] for i in 1:N)
-    
     return P \ q
+end
+
+function _estimate_t!(x, s, w=ones(size(s,2)))
+    D, N = size(s) # t \in R^D, and there are N points to match
+    P = sum(w)*I(D)
+    q = sum(w' .* s, dims=2)
+    #ldiv!(x, factorize(P), q)  # Throws errors?
+    copyto!(x, P \ q)
+end
+
+function estimate_t_test()
+    """
+    Test that estimate_t and estimate_t! are equivalent.
+    estimate_t! is the in-place version of estimate_t.
+    """
+    s = rand(3, 100)
+    w = rand(100)
+    t1 = _estimate_t(s, w)
+    t2 = zeros(3)
+    _estimate_t!(t2, s, w)
+    @assert t1 ≈ t2
 end
 
 abstract type PairingMethod end
@@ -269,21 +292,41 @@ function wls_solver_R(w, data)
     return _estimate_R(a, b, w)
 end
 
-function residuals_R(R, data)
+function wls_solver_R!(x, w, data)
+    a, b = data
+    _estimate_R!(x, a, b, w)
+end
+
+function residuals_R(R, δ, data)
     a, b = data
     N = size(a, 2)
-    δ = b - R*a
-    return [norm(δ[:, i]) for i=1:N]
+    numerator = b - R*a
+    return [norm(numerator[:, i]) / δ for i=1:N]
+end
+
+function residuals_R!(rs, R, δ, data)
+    a, b = data
+    numerator = b - R*a
+    for (i, col) in enumerate(eachcol(numerator))
+        rs[i] = norm(col) / δ
+    end
 end
 
 function wls_solver_t(w, s)
     return _estimate_t(s, w)
 end
 
-function residuals_t(t, s)
-    return [norm(s[:, i] - t) for i=1:size(s, 2)]
+function wls_solver_t!(x, w, s)
+    return _estimate_t!(x, s, w)
 end
 
+function residuals_t(t, s, β)
+    return [norm(s[:, i] - t)/β for i=1:size(s, 2)]
+end
+
+function residuals_t!(rs, t, s, β)
+    rs = norm.(eachcol(s .- t)) / β
+end
 
 function estimate_R(method::LS, a, b)
     R = _estimate_R(a, b)
@@ -294,6 +337,21 @@ function estimate_R(method::TLS, a, b)
     N = size(a, 2)
     data = (a, b)
     R = GNC_TLS(N, data, wls_solver_R, residuals_R, method.c̄; 
+        max_iterations = method.max_iterations,
+        μ_factor = method.μ_factor,
+        verbose=method.verbose,
+        rtol = method.rtol
+    )
+    return R
+end
+
+function estimate_R_TLS(method, a::Matrix{V}, b::Matrix{V}, δ) where {V}
+    N = size(a, 2)
+    data = (a, b)
+    w = ones(V, N)
+    rs = Vector{V}(undef, N)
+    R = wls_solver_R(w, data)
+    GNC_TLS!(R, w, rs, data, wls_solver_R!, (rs, R, data)->residuals_R!(rs, R, δ, data), method.c̄;
         max_iterations = method.max_iterations,
         μ_factor = method.μ_factor,
         verbose=method.verbose,
@@ -321,10 +379,8 @@ function estimate_t(method::LS, p1,p2,R)
 end
 
 function estimate_t(method::TLS, p1,p2,R)
-
     s = p2 - R * p1
     N = size(s, 2)
-    
     R = GNC_TLS(N, s, wls_solver_t, residuals_t, method.c̄; 
         max_iterations = method.max_iterations,
         μ_factor = method.μ_factor,
@@ -332,6 +388,23 @@ function estimate_t(method::TLS, p1,p2,R)
         rtol = method.rtol
     )
     return R
+end
+
+function estimate_t_TLS(method::TLS, p1::Matrix{V}, p2::Matrix{V}, R, β) where {V}
+    # Method provided for options data, not for type inference
+    s = p2 - R * p1
+    N = size(s, 2)
+    w = ones(V, N)
+    # Initialize rs to vector of all 1s
+    rs = ones(V, N)
+    t = zeros(Float32, 3)
+    GNC_TLS!(t, w, rs, s, wls_solver_t!, (rs, t, s)->residuals_t!(rs, t, s, β), method.c̄;
+        max_iterations = method.max_iterations,
+        μ_factor = method.μ_factor,
+        verbose=method.verbose,
+        rtol = method.rtol
+    )
+    return t
 end
 
 function estimate_t(method::GM, p1, p2, R)
@@ -347,27 +420,34 @@ function estimate_t(method::GM, p1, p2, R)
     return R
 end
 
-function estimate_Rt(p1, p2; method_pairing::PairingMethod, method_R::LsqMethod, method_t::LsqMethod)
-    
+function estimate_Rt(p1::Matrix, p2; method_pairing::PairingMethod, method_R::LsqMethod, method_t::LsqMethod)
     N = size(p1, 2)
-    
     # In order to estimate rototranslation, we need Translation Invariant Measurements (TIMs) 
     # across the two frames. This allows for outlier rejection.
     # Pairing method is configurable and not directly related to the keypoints themselves.
     is, js = make_pairs(method_pairing, N)
-    
     a = p1[:, is] - p1[:, js]
     b = p2[:, is] - p2[:, js]
-    
     R = estimate_R(method_R, a, b)
-    
     t = estimate_t(method_t, p1, p2, R)
-    
     return R, t
     
 end
 
-function get_inlier_inds(p1, p2, ϵ, method_pairing::PairingMethod)
+function estimate_Rt_TLS(p1::Matrix, p2::Matrix; β::Float32, method_pairing::PairingMethod, method_R::TLS, method_t::TLS)
+    N = size(p1, 2)
+    # In order to estimate rototranslation, we need Translation Invariant Measurements (TIMs) 
+    # across the two frames. This allows for outlier rejection.
+    # Pairing method is configurable and not directly related to the keypoints themselves.
+    is, js = make_pairs(method_pairing, N)
+    a = p1[:, is] - p1[:, js]
+    b = p2[:, is] - p2[:, js]
+    R = estimate_R_TLS(method_R, a, b, 2*β)
+    t = estimate_t_TLS(method_t, p1, p2, R, β)
+    return R, t
+end
+
+function get_inlier_inds(p1::Matrix, p2::Matrix, ϵ, method_pairing::PairingMethod)
     """
     Use translation invariant measurements to find inlier indices using max-clique inlier selection.
     Returns: list of indices 
@@ -434,31 +514,20 @@ end
 # a (probably) good anytime approximation will be to run this function with random sets of 4 inds
 # and take the lowest bound produced. This approximation will still be an upper-bound to the error
 function ϵR(p1, β)
-    
     N = size(p1, 2)
-    
     best_bound = Inf
-
     @views @inbounds for i=1:N
-        
         PI = SMatrix{3,3}(p1[:, [i,i,i]])
-        
         for j=(i+1):N, h=(j+1):N, k=(h+1):N
-        
            U = SMatrix{3,3}(p1[:, [j,h,k]]) - PI
-
            σ = σmin(U)
-            
            if σ > 0
                 bound = 2*sqrt(3)*(2β) / σ
                 best_bound = min(bound, best_bound)
            end
-            
         end
     end
-    
     return best_bound
-    
 end
 
 function ϵt(β)

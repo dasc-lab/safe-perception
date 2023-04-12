@@ -17,8 +17,9 @@ SM4{F} = SMatrix{4, 4, F, 16}
 SM3{F} = SMatrix{3, 3, F, 9}
 SV2{F} = SVector{2, F}
 SV3{F} = SVector{3, F}
+SV4{F} = SVector{4, F}
 
-function get_matches(img1, img2, detector_type::String="orb", nfeatures=1000, use_flann=true)
+function get_matches(img1::Py, img2::Py, detector_type::String="orb", nfeatures=1000, use_flann=true)::Tuple{Py, Py, Py}
     """
     Get matches between two grayscale images.
 
@@ -97,7 +98,7 @@ function get_matches(img1, img2, detector_type::String="orb", nfeatures=1000, us
     return kp1, kp2, matches
 end
 
-function get_point_3d(K_inv::SM3{Float32}, point::Tuple{Real, Real}, depth::Real)
+function get_point_3d(K_inv::SM3{Float32}, point::Tuple{Float32, Float32}, depth::Float32)::SV3{Float32}
     """
     Takes a point in u,v and returns a point in x, y, z using the inverse
     camera intrinsics matrix and the known depth (z) of the point.
@@ -111,7 +112,14 @@ function get_point_3d(K_inv::SM3{Float32}, point::Tuple{Real, Real}, depth::Real
     return K_inv * [point...; 1] * depth
 end
 
-function get_points_3d(K, points, depth_map)
+function get_point_3d(K_inv::SM3{Float32}, point::Tuple{Int, Int}, depth::Float32)::SV3{Float32}
+    """
+    Version of get_point_3d for integer points.
+    """
+    return get_point_3d(K_inv, (Float32(point[1]), Float32(point[2])), depth)
+end
+
+function get_points_3d(K::SM3{Float32}, points, depth_map::Matrix{Float32})::Matrix{Float32}
     """
     Converts a list of points in the image frame to a 3d point cloud.
 
@@ -120,37 +128,43 @@ function get_points_3d(K, points, depth_map)
         points: 2 x n array of points [u; v] to reproject
         depth_map: depth map for entire image
     Returns:
-        Vector{SVector{3, Float32}}
+        3xN points
     """
     K_inv = SM3{Float32}(inv(K))
     n_pts = size(points, 2)
-    out_points = SV3[]
-    for i in 1:n_pts
+    UVD = Matrix{Float32}(undef, 3, n_pts)
+    @inbounds for i in 1:n_pts
         point = points[:, i]
-        # Round for indexing into the depth map. Note that keypoints are Float64,
+        # Round for indexing into the depth map. Note that keypoints are Float,
         # even though the image is composed of discrete pixels. Not sure if this
         # is the best way to reproject given the limitations of the depth map.
+        # TODO(rgg): check if there's an off-by-one error from Python indexing
         u_ind, v_ind = round.(Int, point)
-        pt_3d = get_point_3d(K_inv, Tuple(point), depth_map[v_ind, u_ind])
-        # Some will be projected to the origin (invalid depth)
+        d = depth_map[v_ind, u_ind]
+        UVD[1, i] = point[1] * d
+        UVD[2, i] = point[2] * d
+        UVD[3, i] = d
+        # Some will be projected to the origin (invalid depth=0)
         # We keep these in the output to match the input
-        push!(out_points, pt_3d)
     end
-    return out_points
+    return K_inv * UVD
 end
 
-function get_points_3d(K, depth_map)
+function get_points_3d(K::SM3{Float32}, depth_map::Matrix{Float32})::Matrix{Float32}
     """
     Reproject all points in depth image to 3D.
+    Args:
+        K: camera intrinsics matrix
+        depth_map: depth image
     Returns:
-        SMatrix{3, N, Float32}
+        Matrix{3, N, Float32} of xyz points where N is the number of pixels in the image
     """
-    K_inv = inv(SM3{Float32}(K))  # StaticArrays has special inverse ops for 3x3 matrices that might be faster
+    K_inv = inv(K) 
     N = prod(size(depth_map))
     UVD = Matrix{Float32}(undef, 3, N)
     tol = eps()
     ind = 1
-    for i in CartesianIndices(depth_map)
+    @inbounds for i in CartesianIndices(depth_map)
         d = depth_map[i]
         if abs(d) > tol  # invalid depth returns are mapped to the origin
             # u, v map to x, y; but cartesian indexing is [y][x]
@@ -161,16 +175,6 @@ function get_points_3d(K, depth_map)
         end
     end
     return K_inv * UVD[:, 1:ind-1]
-end
-
-function get_points_3d(K, depth_map, R, t)
-    """
-    Get Vector{SVector{3, Float32}} of points rotated through R and translated by t
-    Not efficient.
-    """
-    pts = get_points_3d(K, depth_map)
-    transformed_pts = [R*p + t for p in eachcol(pts)]
-    return transformed_pts
 end
 
 # Functions for plotting / visualization
@@ -188,6 +192,17 @@ function get_point_color(point, color_img)
     bgr = pyconvert(Vector{UInt32}, color_img[v_ind-1][u_ind-1]) ./ 255
     rgb = RGB(bgr[3], bgr[2], bgr[1])
     return rgb
+end
+
+function convert_py_rgb_img(py_img::Py)
+    """
+    Convert an OpenCV image to a Julia RGB image.
+    """
+    jl_img = pyconvert(Array{Float64}, py_img) ./ 255
+    # Python image is actually BGR (not RGB), so reverse the channels
+    reverse!(jl_img, dims=3)
+    # Create RGB objects out of the RGB values
+    return mapslices((v)->RGB(v...), jl_img, dims=3)
 end
 
 line_material = LineBasicMaterial(color=RGB(0, 0, 1), linewidth=2.0)
@@ -272,7 +287,7 @@ function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t
     Args:
         vis: MeshCat Visualizer
         depth_map: 2D indexable e.g. Matrix{Float64}
-        img_color: 2D indexable of Colorant
+        img_color: 2D indexable 
         K: camera matrix
         R: [optional] rotation matrix to apply to every point
         t: [optional] translation to apply to every point
@@ -280,13 +295,13 @@ function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t
     """
     colors = Colorant[]
     points = Point3f[]
-    K_inv = SM4(inv(K))
+    K_inv = inv(K)
     u_max = pyconvert(Int32, np.shape(img_color)[1])
     v_max = pyconvert(Int32, np.shape(img_color)[0])
-    for v in 1:v_max
-        for u in 1:u_max
-            c = get_point_color([u; v], img_color)
-            pt3d = (R*get_point_3d(K_inv, [u; v], depth_map[v, u])) + t
+    @inbounds for v in 1:v_max
+        @inbounds for u in 1:u_max
+            c = img_color[v, u]
+            pt3d = (R*get_point_3d(K_inv, (u, v), depth_map[v, u])) + t
             # Invalid returns will be exactly at the origin
             if norm(pt3d) > eps()
                 push!(points, pt3d)
@@ -301,7 +316,7 @@ function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t
     return label
 end
 
-function remove_invalid_matches(p1, p2)
+function remove_invalid_matches(p1::Matrix, p2::Matrix)
     """
     Takes in two matching 3xN matrices of 3D point correspondences. 
     Removes all matching pairs where at least one point is at the origin.
@@ -310,7 +325,7 @@ function remove_invalid_matches(p1, p2)
     n_pts = size(p1, 2)
     valid_inds = Int32[]
     # TODO(rgg): cleaner way with mapslices or similar?
-    for i in 1:n_pts
+    @inbounds for i in 1:n_pts
         pt1 = p1[:, i]
         pt2 = p2[:, i]
         if norm(pt1) > eps() && norm(pt2) > eps()
@@ -321,7 +336,7 @@ function remove_invalid_matches(p1, p2)
 end
 
 # Apply rototranslation to frame 1 3d keypoints
-function apply_Rt(pts, R::SM3{Real}, t::SV3{Real})
+function apply_Rt(pts::Matrix, R::SM3{Real}, t::SV3{Real})
     """
     Applies rototranslation to 3D points.
     Args:
@@ -333,24 +348,31 @@ function apply_Rt(pts, R::SM3{Real}, t::SV3{Real})
     out = zeros(size(pts))
     N = size(pts, 2)
     pts_aug = [pts; ones(1, N)]
-    for (i, col) in enumerate(eachcol(pts_aug))
+    @inbounds for (i, col) in enumerate(eachcol(pts_aug))
         out[:, i] = (Rt*col)[1:3]
     end
     return out
 end
 
-function apply_T(pts, T::SM4)
+function apply_T(pts::Matrix, T::SM4)
     """
     Applies rototranslation to 3D points.
     Args:
         pts: 3xN xyz points
         T: 4x4 homogeneous transformation matrix
     """
-    out = zeros(size(pts))
     N = size(pts, 2)
     pts_aug = [pts; ones(1, N)]
-    for (i, col) in enumerate(eachcol(pts_aug))
-        out[:, i] = (T*col)[1:3]
-    end
-    return out
+    return (T*pts_aug)[1:3, :]
+end
+
+function apply_T(pt::Vector, T::SM4)::SV3
+    """
+    Applies rototranslation to 3D points.
+    Args:
+        pts: 3x1 xyz point
+        T: 4x4 homogeneous transformation matrix
+    """
+    pt_aug = [pt; 1]
+    return (T*pt_aug)[1:3, :]
 end

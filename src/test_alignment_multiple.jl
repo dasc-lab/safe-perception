@@ -24,10 +24,6 @@ depth_ts = depth_filenames[:,1]
 depth_filenames = depth_filenames[:,2]  # Remove other columns for convenience
 img_filenames = [joinpath("rgb", f) for f in readdir(joinpath(df, "rgb"))]
 
-#dimgs = [get_depth(df, n) for n in depth_filenames[:,2]]
-#imgs_color = [get_imgs(df, n) for n in img_filenames]
-#imgs_gray = [cv.cvtColor(ic, cv.COLOR_BGR2GRAY) for ic in imgs_color]  # Used for keypoints
-
 # Read in groundtruth
 # Columns: timestamp tx ty tz qx qy qz qw
 gt_path = joinpath(df, "groundtruth.txt")

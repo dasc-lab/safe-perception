@@ -63,24 +63,25 @@ function get_groundtruth_Rt(gtruth, time1)
     return R, t1
 end
 
-function get_T(R, t)
+function get_T(R, t)::SM4{Float32}
     return SM4{Float32}([R t; 0 0 0 1])
 end
 
-function get_depth(data_folder, dimg_name)
+function get_depth(data_folder, dimg_name)::Matrix{Float32}
     depth_path = joinpath(data_folder, dimg_name) 
+    # TODO(rgg): just read this directly into Julia
     depth = cv.imread(depth_path, cv.IMREAD_ANYDEPTH) 
     depth = pyconvert(Matrix{UInt16}, depth) ./ 5000  # Divide by 5000 for eth3d dataset
     return depth
 end
 
-function get_imgs(data_folder, img_name)
+function get_imgs(data_folder::String, img_name::String)::Py
     path = joinpath(data_folder, img_name) 
     img_color = cv.imread(path, cv.IMREAD_COLOR) 
     return img_color
 end
 
-function get_matched_pts(img1, img2, depth1, depth2)
+function get_matched_pts(img1::Py, img2::Py, depth1::Matrix{Float32}, depth2::Matrix{Float32})
     """
     Returns two 3xN matrices containing 3D points.
     Columns align to form matched pairs of keypoints.
@@ -99,26 +100,26 @@ function get_matched_pts(img1, img2, depth1, depth2)
 
     p1_jl = Matrix{Float32}(undef, 2, N_kp1)
     for (i, kp) in enumerate(kp1)
-        p1_jl[:, i] = pyconvert(Vector{Float64}, kp.pt)
+        p1_jl[:, i] = pyconvert(Vector{Float32}, kp.pt)
     end
     p1_3d = get_points_3d(K, p1_jl, depth1)
 
     p2_jl = Matrix{Float32}(undef, 2, N_kp2)
     for (i, kp) in enumerate(kp2)
-        p2_jl[:, i] = pyconvert(Vector{Float64}, kp.pt)
+        p2_jl[:, i] = pyconvert(Vector{Float32}, kp.pt)
     end
     p2_3d = get_points_3d(K, p2_jl, depth2)
 
     # Then, assemble corresponding matrices of points from matches
     n_matches = pyconvert(Int32, py.len(matches))
-    matched_pts1 = zeros(Float64, 3, n_matches)
-    matched_pts2 = zeros(Float64, 3, n_matches)
+    matched_pts1 = zeros(Float32, 3, n_matches)
+    matched_pts2 = zeros(Float32, 3, n_matches)
     for i in 1:n_matches
         m = matches[i-1]  # Python indexing
         idx1 = pyconvert(Int32, m.queryIdx)+1
         idx2 = pyconvert(Int32, m.trainIdx)+1
-        matched_pts1[:, i] = p1_3d[idx1]
-        matched_pts2[:, i] = p2_3d[idx2]
+        matched_pts1[:, i] = p1_3d[:, idx1]
+        matched_pts2[:, i] = p2_3d[:, idx2]
     end
     # Finally, clean correspondence list of any pairs that contain either point at the origin (invalid depth)
     matched_pts1, matched_pts2 = remove_invalid_matches(matched_pts1, matched_pts2)
