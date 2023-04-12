@@ -63,8 +63,6 @@ function get_fov_polyhedron(K, T, xrange, yrange)
     """
     hs = generate_fov_halfspaces(K, T, xrange, yrange)
     p = polyhedron(reduce(∩, hs))
-
-
     return p
 end
 
@@ -122,7 +120,7 @@ end
 
 function get_obs_free_polyhedron(points::Matrix{Float32},
                                 seed; 
-                                T=SM4([I(3) zeros(3); zeros(4)'])::SM4{Float32},
+                                T=SM4(1f0*I(4))::SM4{Float32},
                                 ϵ=0,
                                 bbox=[5, 5, 5],
                                 dilation_radius=0.1)
@@ -151,8 +149,9 @@ function get_obs_free_polyhedron(points::Matrix{Float32},
                                           dilation_radius)
     # Transform polyhedron to world frame
     T_inv = inv(T)  # Camera frame to world frame
-    normals_w = [SV3{Float32}((T_inv * SV4{Float32}([r.n; 1f0]))[1:3]) for r in result]
-    points_w = [SV3{Float32}((T_inv * SV4{Float32}([r.p; 1f0]))[1:3]) for r in result]
+    R, t = extract_R_t(T_inv)
+    normals_w = [SV3{Float32}(R * SV3{Float32}(r.n)) for r in result]
+    points_w = [SV3{Float32}(R * SV3{Float32}(r.p)) + t for r in result]
     result_w = zip(normals_w, points_w)
 
     hs_shrunk = [Polyhedra.HalfSpace(n, (n' * p) - ϵ) for (n,p) in result_w]

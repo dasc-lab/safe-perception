@@ -55,7 +55,7 @@ function plot_all()
     N = length(img_filenames)
     step = 3
     start = 9
-    stop = 27
+    stop = 37
     R_init, t_init = get_groundtruth_Rt(gtruth, depth_ts[start])
     local prev_T = get_T(R_init, t_init)
 
@@ -104,7 +104,8 @@ function plot_all()
             @printf "Estimating error bounds with max clique and sampling\n"
             @time ϵR, ϵt = PE.est_err_bounds(matched_pts1, matched_pts2, β, iterations=1000)
             @show ϵR, ϵt
-            @show norm_ball_err = ϵR * 5 + ϵt
+            max_dist = 1f0 # maximum distance from camera to any point [m]
+            @show norm_ball_err = ϵR * max_dist + ϵt
 
             R, t = extract_R_t(prev_T)
             seed = SV3([0f0, 0f0, 0f0])
@@ -114,7 +115,12 @@ function plot_all()
             translucent_purple = MeshLambertMaterial(color=RGBA(0.5, 0, 0.5, 0.5))
             translucent_red = MeshLambertMaterial(color=RGBA(1, 0, 0, 0.5))
             @printf "Getting obstacle-free polyhedron with DecompUtil\n"
-            @time obs_poly = get_obs_free_polyhedron(obs_points_camera_frame, seed, T=inv(prev_T), bbox=[1, 1, 1])
+            # Will only be guaranteed to not intersect obstacles in the current frame
+            @time obs_poly = get_obs_free_polyhedron(obs_points_camera_frame,
+                                                     seed,
+                                                     T=inv(prev_T),
+                                                     bbox=[2, 2, 2],
+                                                     ϵ=norm_ball_err)
             @printf "Getting FOV poly\n"
             @time fov_poly = get_fov_polyhedron(K, inv(prev_T), xrange, yrange)
             safe_poly = intersect(fov_poly, obs_poly)
@@ -127,8 +133,8 @@ function plot_all()
                 show_pointcloud_color!(vis, next_dimg, next_color_jl, K, R, t)
                 # show_pointcloud_color!(vis, next_dimg, next_color_jl, K, I(3), [0.;0;0])
                 setobject!(vis["safe_poly"], safe_poly_mesh, translucent_red)
-                plot_fov_polyhedron!(vis, K, inv(prev_T), xrange, yrange, max_depth=3)
-                setobject!(vis["obs_poly"], obs_poly_mesh, translucent_purple)
+                # plot_fov_polyhedron!(vis, K, inv(prev_T), xrange, yrange, max_depth=3)
+                # setobject!(vis["obs_poly"], obs_poly_mesh, translucent_purple)
             end
         end
     end

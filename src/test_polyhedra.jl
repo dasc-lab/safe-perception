@@ -33,10 +33,19 @@ delete!(vis)  # Clear any rendered objects
 ϵ = 0.2  # norm ball error around points
 hs = [Polyhedra.HalfSpace(r.n, r.n' * r.p) for r in result]
 hs_shrunk = [Polyhedra.HalfSpace(r.n, r.n' * r.p - ϵ) for r in result]
+# Test rototranslation of polyhedron
+R = RotX(0.0) * RotY(0.0) * RotZ(pi/6)
+t = [1.0, 2, 0.5]
+T = get_T(R, t)
+# Transform polyhedron
+hs_T = [Polyhedra.HalfSpace(R * r.n, (R * r.n)' * (T * [r.p; 1f0])[1:3]) for r in result]
+
 p = polyhedron(reduce(∩, hs))
 p_shrunk = polyhedron(reduce(∩, hs_shrunk))
+p_T = polyhedron(reduce(∩, hs_T))
 m = Polyhedra.Mesh(p)
 m_shrunk = Polyhedra.Mesh(p_shrunk)
+m_T = Polyhedra.Mesh(p_T)
 
 # Plot points
 solid_green = MeshLambertMaterial(color=RGB(0, 1, 0))
@@ -50,3 +59,4 @@ for (i, c) in enumerate(obs)
 end
 setobject!(vis["shrunk"], m_shrunk, translucent_blue)
 setobject!(vis["outer"], m, translucent_purple)
+setobject!(vis["transformed"], m_T, translucent_purple)
