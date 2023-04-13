@@ -1,5 +1,5 @@
 include("PoseEstimation.jl")
-include("test_utils.jl")
+include("utils.jl")
 using .PoseEstimation
 using BenchmarkTools, Random, Rotations
 using LinearAlgebra  # norm

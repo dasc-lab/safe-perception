@@ -1,4 +1,6 @@
-# Helper functions for evaluating results
+# Helper functions for various tasks
+# TODO(rgg): reorganize to approprate modules
+
 function find_interp_idx(arr, val)
     """
     Finds the relevant indices for linear interpolation in a 1-D sorted array.
@@ -69,34 +71,6 @@ function get_T(R, t)::SM4{Float32}
     Convert a rotation and translation to a 4x4 homogeneous transformation matrix.
     """
     return SM4{Float32}([R t; 0 0 0 1])
-end
-
-function get_depth(data_folder, dimg_name)::Matrix{Float32}
-    """
-    Gets a depth image from the data folder.
-    Args:
-        data_folder: path to folder containing images
-        dimg_name: name of depth image file (e.g. "depth_0.png")
-    Returns: a Julia array depth image in meters.
-    """
-    depth_path = joinpath(data_folder, dimg_name) 
-    # TODO(rgg): just read this directly into Julia
-    depth = cv.imread(depth_path, cv.IMREAD_ANYDEPTH) 
-    depth = pyconvert(Matrix{UInt16}, depth) ./ 5000  # Divide by 5000 for eth3d dataset
-    return depth
-end
-
-function get_imgs(data_folder::String, img_name::String)::Py
-    """
-    Gets an image from the data folder.
-    Args:
-        data_folder: path to folder containing images
-        img_name: name of image file (e.g. "image_0.png")
-    Returns: an OpenCV image in BGR format.
-    """
-    path = joinpath(data_folder, img_name) 
-    img_color = cv.imread(path, cv.IMREAD_COLOR) 
-    return img_color
 end
 
 function get_matched_pts(img1::Py, img2::Py, depth1::Matrix{Float32}, depth2::Matrix{Float32})
