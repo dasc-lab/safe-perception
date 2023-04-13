@@ -134,7 +134,7 @@ function quat_to_rot(q::Quaternion{F}) where {F}
     return SMatrix{3,3,F,9}(R)
 end
 
-function construct_Q(N, a::AF, b::AF, w::VF) where {F, AF<:AbstractArray{F}, VF<:AbstractVector{F}}
+function construct_Q(N, a::AF, b::AF, w) where {F, AF<:AbstractArray{F}, VF<:AbstractVector{F}}
     # construct Q matrix
     Q = zero(MMatrix{4,4, F, 16})
 
@@ -214,8 +214,8 @@ function _estimate_t!(x, s, w=ones(size(s,2)))
     D, N = size(s) # t \in R^D, and there are N points to match
     P = sum(w)*I(D)
     q = sum(w' .* s, dims=2)
-    #ldiv!(x, factorize(P), q)  # Throws errors?
-    copyto!(x, P \ q)
+    ldiv!(x, factorize(P), q) 
+    # copyto!(x, P \ q)  # Slower?
 end
 
 function estimate_t_test()
@@ -333,10 +333,10 @@ function estimate_R(method::LS, a, b)
     return R
 end
 
-function estimate_R(method::TLS, a, b)
+function estimate_R(method::TLS, a, b, δ)
     N = size(a, 2)
     data = (a, b)
-    R = GNC_TLS(N, data, wls_solver_R, residuals_R, method.c̄; 
+    R = GNC_TLS(N, data, wls_solver_R, (R, data)->residuals_R(R, δ, data), method.c̄; 
         max_iterations = method.max_iterations,
         μ_factor = method.μ_factor,
         verbose=method.verbose,
@@ -350,7 +350,10 @@ function estimate_R_TLS(method, a::Matrix{V}, b::Matrix{V}, δ) where {V}
     data = (a, b)
     w = ones(V, N)
     rs = Vector{V}(undef, N)
-    R = wls_solver_R(w, data)
+    R = I(3)
+    # Required initialization.
+    # Without this, GNC_TLS may converge to a bad solution / throw errors
+    wls_solver_R!(R, w, data)  
     GNC_TLS!(R, w, rs, data, wls_solver_R!, (rs, R, data)->residuals_R!(rs, R, δ, data), method.c̄;
         max_iterations = method.max_iterations,
         μ_factor = method.μ_factor,
@@ -378,10 +381,10 @@ function estimate_t(method::LS, p1,p2,R)
     return t
 end
 
-function estimate_t(method::TLS, p1,p2,R)
+function estimate_t(method::TLS, p1, p2, R, β)
     s = p2 - R * p1
     N = size(s, 2)
-    R = GNC_TLS(N, s, wls_solver_t, residuals_t, method.c̄; 
+    R = GNC_TLS(N, s, wls_solver_t, (t, s)->residuals_t(t, s, β), method.c̄; 
         max_iterations = method.max_iterations,
         μ_factor = method.μ_factor,
         verbose=method.verbose,
@@ -398,6 +401,9 @@ function estimate_t_TLS(method::TLS, p1::Matrix{V}, p2::Matrix{V}, R, β) where 
     # Initialize rs to vector of all 1s
     rs = ones(V, N)
     t = zeros(Float32, 3)
+    # Required initialization.
+    # Without this, GNC_TLS may converge to a bad solution / throw errors
+    wls_solver_t!(t, w, s)
     GNC_TLS!(t, w, rs, s, wls_solver_t!, (rs, t, s)->residuals_t!(rs, t, s, β), method.c̄;
         max_iterations = method.max_iterations,
         μ_factor = method.μ_factor,
@@ -420,7 +426,11 @@ function estimate_t(method::GM, p1, p2, R)
     return R
 end
 
-function estimate_Rt(p1::Matrix, p2; method_pairing::PairingMethod, method_R::LsqMethod, method_t::LsqMethod)
+function estimate_Rt(p1::Matrix, p2; method_pairing::PairingMethod, β::Float32, method_R::LsqMethod, method_t::LsqMethod)
+    """
+    Uses multiple dispatch (slower compilation?) to select the appropriate method for estimating R and t.
+    TLS method uses non-in-place version of GNC_TLS, which is slower than in-place version.
+    """
     N = size(p1, 2)
     # In order to estimate rototranslation, we need Translation Invariant Measurements (TIMs) 
     # across the two frames. This allows for outlier rejection.
@@ -428,10 +438,10 @@ function estimate_Rt(p1::Matrix, p2; method_pairing::PairingMethod, method_R::Ls
     is, js = make_pairs(method_pairing, N)
     a = p1[:, is] - p1[:, js]
     b = p2[:, is] - p2[:, js]
-    R = estimate_R(method_R, a, b)
-    t = estimate_t(method_t, p1, p2, R)
+    # TODO(rgg): fix methods to all take β as a parameter (necessary)
+    R = estimate_R(method_R, a, b, 2*β)
+    t = estimate_t(method_t, p1, p2, R, β)
     return R, t
-    
 end
 
 function estimate_Rt_TLS(p1::Matrix, p2::Matrix; β::Float32, method_pairing::PairingMethod, method_R::TLS, method_t::TLS)

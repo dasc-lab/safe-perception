@@ -1,3 +1,4 @@
 @time include("test_mapping_multiple.jl")
-plot_all()
+run_test()
+@time run_test()
 # @profview plot_all()

@@ -1,7 +1,7 @@
 # Helper functions for evaluating results
 function find_interp_idx(arr, val)
     """
-    Find the relevant indices for linear interpolation in a 1-D sorted array
+    Finds the relevant indices for linear interpolation in a 1-D sorted array.
     """
     lower = searchsortedlast(arr, val)
     lower = lower < firstindex(arr) ? firstindex(arr) : lower
@@ -13,6 +13,7 @@ end
 function interp_lin(arr, t)
     """
     Interpolate between two rows, column-wise using first column to determine interpolation constant.
+    Helper function for ground truth rototranslation interpolation.
     """
     # Check degenerate case
     lower, upper = find_interp_idx(arr[:, 1], t)
@@ -64,10 +65,20 @@ function get_groundtruth_Rt(gtruth, time1)
 end
 
 function get_T(R, t)::SM4{Float32}
+    """
+    Convert a rotation and translation to a 4x4 homogeneous transformation matrix.
+    """
     return SM4{Float32}([R t; 0 0 0 1])
 end
 
 function get_depth(data_folder, dimg_name)::Matrix{Float32}
+    """
+    Gets a depth image from the data folder.
+    Args:
+        data_folder: path to folder containing images
+        dimg_name: name of depth image file (e.g. "depth_0.png")
+    Returns: a Julia array depth image in meters.
+    """
     depth_path = joinpath(data_folder, dimg_name) 
     # TODO(rgg): just read this directly into Julia
     depth = cv.imread(depth_path, cv.IMREAD_ANYDEPTH) 
@@ -76,6 +87,13 @@ function get_depth(data_folder, dimg_name)::Matrix{Float32}
 end
 
 function get_imgs(data_folder::String, img_name::String)::Py
+    """
+    Gets an image from the data folder.
+    Args:
+        data_folder: path to folder containing images
+        img_name: name of image file (e.g. "image_0.png")
+    Returns: an OpenCV image in BGR format.
+    """
     path = joinpath(data_folder, img_name) 
     img_color = cv.imread(path, cv.IMREAD_COLOR) 
     return img_color
@@ -123,11 +141,19 @@ function get_matched_pts(img1::Py, img2::Py, depth1::Matrix{Float32}, depth2::Ma
     end
     # Finally, clean correspondence list of any pairs that contain either point at the origin (invalid depth)
     matched_pts1, matched_pts2 = remove_invalid_matches(matched_pts1, matched_pts2)
-    @info "Matching and cleaning complete"
+    @info "Keypoint finding, matching, and cleaning complete"
     return matched_pts1, matched_pts2
 end
 
 function generate_synthetic_data(;N=1_000, β=0.01, outlier_fraction=0.5, outlier_noise=40)
+    """
+    Generates synthetic data for testing pose estimation algorithms.
+    Args:
+        N: number of points to generate
+        β: inlier noise bound
+        outlier_fraction: fraction of points to make outliers
+        outlier_noise: outlier noise multiplier. Noise will be gaussian with mean 0 and std = outlier_noise
+    """
     # Generate a ground-truth pose
     R_groundtruth = rand(RotMatrix{3})
     # Generate a ground-truth translation

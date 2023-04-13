@@ -6,7 +6,6 @@ using PythonCall, GeometryBasics, LinearAlgebra, StaticArrays
 using ColorTypes, MeshCat
 using UUIDs
 using Logging, Printf
-debug_logger = Logging.ConsoleLogger(Logging.Info)
 
 Point3f = Point3f0  # For newer versions of GeometryBasics
 cv = pyimport("cv2")
@@ -77,6 +76,10 @@ function get_matches(img1::Py, img2::Py, detector_type::String="orb", nfeatures=
         @time all_matches = flann.knnMatch(des1,des2,k=2)  # Get two nearest neighbors for ratio test
         # Ratio test as per Lowe's paper
         matches = py.list()  # TODO(rgg): make this a Julia vector?
+        if pyconvert(Int, py.len(all_matches)) == 0
+            @warn "No matches found"
+            return kp1, kp2, matches
+        end
         for (m, n) in all_matches
             if pyconvert(Bool, m.distance < 0.7*n.distance)
                 matches.append(m)
@@ -194,7 +197,7 @@ function get_point_color(point, color_img)
     return rgb
 end
 
-function convert_py_rgb_img(py_img::Py)
+function convert_py_rgb_img(py_img::Py)::Array
     """
     Convert an OpenCV image to a Julia RGB image.
     """
@@ -296,8 +299,8 @@ function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t
     colors = Colorant[]
     points = Point3f[]
     K_inv = inv(K)
-    u_max = pyconvert(Int32, np.shape(img_color)[1])
-    v_max = pyconvert(Int32, np.shape(img_color)[0])
+    u_max = size(img_color, 2)
+    v_max = size(img_color, 1)
     @inbounds for v in 1:v_max
         @inbounds for u in 1:u_max
             c = img_color[v, u]
@@ -368,7 +371,7 @@ end
 
 function apply_T(pt::Vector, T::SM4)::SV3
     """
-    Applies rototranslation to 3D points.
+    Applies rototranslation to a single 3D point.
     Args:
         pts: 3x1 xyz point
         T: 4x4 homogeneous transformation matrix

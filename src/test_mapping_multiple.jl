@@ -1,7 +1,8 @@
 import Pkg
-# run(`ls`)
-# Pkg.activate("src/")
-# Pkg.instantiate()
+using Logging, Printf
+logger = Logging.ConsoleLogger(Logging.Info)
+Logging.global_logger(logger)
+
 include("PoseEstimation.jl")
 include("ingest.jl")
 include("matching.jl")
@@ -14,6 +15,7 @@ using Printf
 using DecompUtil
 PE = PoseEstimation
 py = pybuiltins
+
 
 """
 Integrated test to visualize safe flight corridors computed on 
@@ -51,11 +53,15 @@ end
 const c̄ = 1f0  # Maximum residual of inliers
 const β = 0.005f0  # TODO(rgg): refine this value and ̄c
 
-function plot_all()
+function run_test()
+    """
+    Iterates over some number of frames and computes rototranslation using
+    visual odometry. Computes safe flight corridor polyhedra.
+    """
     N = length(img_filenames)
     step = 3
     start = 9
-    stop = 37
+    stop = 180
     R_init, t_init = get_groundtruth_Rt(gtruth, depth_ts[start])
     local prev_T = get_T(R_init, t_init)
 
@@ -68,9 +74,14 @@ function plot_all()
     yrange = [0, pyconvert(Int32, curr_color.shape[0])]
     xrange = [0, pyconvert(Int32, curr_color.shape[1])]
 
-    #show_pointcloud_color!(vis, curr_dimg, curr_color, K, R_init, t_init)
+    if visualize
+        # Show first frame
+        curr_color_jl = convert_py_rgb_img(curr_color)
+        show_pointcloud_color!(vis, curr_dimg, curr_color_jl, K, R_init, t_init)
+    end
+
     for i in start:step:stop
-        @printf "\n============== Step %i of %i ===============\n" i (N-step)
+        @info @sprintf("\n============== Step %i of %i ===============\n", i, (N-step))
         @time begin 
             curr_dimg = get_depth(df, depth_filenames[i])
             next_dimg = get_depth(df, depth_filenames[i+step])
@@ -81,9 +92,9 @@ function plot_all()
 
             t_1 = depth_ts[i]
             t_2 = depth_ts[i+step]
-            @printf "Finding correspondences\n"
+            @info "Finding correspondences"
             @time matched_pts1, matched_pts2 = get_matched_pts(curr_gray, next_gray, curr_dimg, next_dimg)
-            @printf "Estimating R, t with TLS"
+            @info "Estimating R, t with TLS"
             @time R_tls_2_1, t_tls_2_1 = PE.estimate_Rt_TLS(matched_pts2, matched_pts1;
                 β=β,
                 method_pairing=PE.Star(),
@@ -101,7 +112,7 @@ function plot_all()
             # Calculate error bounds for relative transformation (not cumulative)
             # Inlier noise, related to choice of ̄c. See TEASER paper.
             # Estimate error on TLS
-            @printf "Estimating error bounds with max clique and sampling\n"
+            @info "Estimating error bounds with max clique and sampling"
             @time ϵR, ϵt = PE.est_err_bounds(matched_pts1, matched_pts2, β, iterations=1000)
             @show ϵR, ϵt
             max_dist = 1f0 # maximum distance from camera to any point [m]
@@ -109,19 +120,19 @@ function plot_all()
 
             R, t = extract_R_t(prev_T)
             seed = SV3([0f0, 0f0, 0f0])
-            @printf "Reprojecting depth image and transforming"
+            @info "Reprojecting depth image and transforming"
             @time obs_points_camera_frame = get_points_3d(K, next_dimg)
             # TODO(rgg): add norm ball errors
             translucent_purple = MeshLambertMaterial(color=RGBA(0.5, 0, 0.5, 0.5))
             translucent_red = MeshLambertMaterial(color=RGBA(1, 0, 0, 0.5))
-            @printf "Getting obstacle-free polyhedron with DecompUtil\n"
+            @info "Getting obstacle-free polyhedron with DecompUtil"
             # Will only be guaranteed to not intersect obstacles in the current frame
             @time obs_poly = get_obs_free_polyhedron(obs_points_camera_frame,
                                                      seed,
                                                      T=inv(prev_T),
                                                      bbox=[2, 2, 2],
                                                      ϵ=norm_ball_err)
-            @printf "Getting FOV poly\n"
+            @info "Getting FOV poly\n"
             @time fov_poly = get_fov_polyhedron(K, inv(prev_T), xrange, yrange)
             safe_poly = intersect(fov_poly, obs_poly)
 
@@ -136,6 +147,7 @@ function plot_all()
                 # plot_fov_polyhedron!(vis, K, inv(prev_T), xrange, yrange, max_depth=3)
                 # setobject!(vis["obs_poly"], obs_poly_mesh, translucent_purple)
             end
+            @info "Completed processing one frame"
         end
     end
 end
