@@ -4,9 +4,9 @@ using StaticArrays
 include("matching.jl")  # For transformation functions and types, move these / use library?
 
 function generate_fov_halfspaces(K::SM3{Float32},
-                                T::SM4{Float32},
-                                xrange::Vector{Int},
-                                yrange::Vector{Int})
+                                 T::SM4{Float32},
+                                 xrange::Vector{Int},
+                                 yrange::Vector{Int})
     """
     Generate a list of half-spaces representing the
     boundary of the camera field of view (FOV).
@@ -36,7 +36,10 @@ function generate_corner_vectors(K::SM3{Float32}, T::SM4{Float32}, xrange, yrang
     """
     Construct normalized vectors along "corners" of FOV boundary, in world frame rotation.
     Args:
+        K: camera matrix
         T: 4x4 rototranslation from world frame to camera frame
+        xrange: [min, max] u in image coordinates
+        yrange: [min, max] v in image coordinates
     """
     K_inv = inv(K)
     T_inv = inv(T)  # Camera frame to world frame
