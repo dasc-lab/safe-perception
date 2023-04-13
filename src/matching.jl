@@ -21,14 +21,13 @@ SV4{F} = SVector{4, F}
 function get_matches(img1::Py, img2::Py, detector_type::String="orb", nfeatures=1000, use_flann=true)::Tuple{Py, Py, Py}
     """
     Get matches between two grayscale images.
-
     Args:
         img1: first image
         img2: second image 
         detector_type: "orb", "sift", or "akaze"
         nfeatures: max features to retain for all detectors except AKAZE. Does NOT guarantee this many features.
 
-    Returns: keypoints from image 1, keypoints from image 2, matches, all as relevant OpenCV objects
+    Returns: (keypoints from image 1, keypoints from image 2, matches); all as relevant OpenCV objects
     """
 
     # Set up detector and distance to use for matching
@@ -105,12 +104,12 @@ function get_point_3d(K_inv::SM3{Float32}, point::Tuple{Float32, Float32}, depth
     """
     Takes a point in u,v and returns a point in x, y, z using the inverse
     camera intrinsics matrix and the known depth (z) of the point.
-
+    Slow, use for visualization only.
     Args:
         K_inv: inverse camera intrinsics matrix
         point: in image frame
         depth: depth associated with the given pixel
-    Returns: SVector{3}
+    Returns: 3x1 vector
     """
     return K_inv * [point...; 1] * depth
 end
@@ -118,6 +117,7 @@ end
 function get_point_3d(K_inv::SM3{Float32}, point::Tuple{Int, Int}, depth::Float32)::SV3{Float32}
     """
     Version of get_point_3d for integer points.
+    Slow, use for visualization only.
     """
     return get_point_3d(K_inv, (Float32(point[1]), Float32(point[2])), depth)
 end
@@ -125,7 +125,7 @@ end
 function get_points_3d(K::SM3{Float32}, points, depth_map::Matrix{Float32})::Matrix{Float32}
     """
     Converts a list of points in the image frame to a 3d point cloud.
-
+    Used for reprojecting keypoints to 3d space.
     Args:
         K: camera intrinsics matrix
         points: 2 x n array of points [u; v] to reproject
@@ -156,6 +156,7 @@ end
 function get_points_3d(K::SM3{Float32}, depth_map::Matrix{Float32})::Matrix{Float32}
     """
     Reproject all points in depth image to 3D.
+    Used for reprojecting entire point cloud to 3d space for finding safe flight corridors.
     Args:
         K: camera intrinsics matrix
         depth_map: depth image
@@ -181,7 +182,7 @@ function get_points_3d(K::SM3{Float32}, depth_map::Matrix{Float32})::Matrix{Floa
 end
 
 # Functions for plotting / visualization
-# TOOD(rgg): put in separate file?
+# TOOD(rgg): put these in separate file?
 
 function get_point_color(point, color_img)
     """
@@ -248,7 +249,7 @@ end
 
 function show_correspondence!(vis::Visualizer, kpoints1, kpoints2, label=string(uuid1()))
     """
-    Shows all correspondences in matches lists of 3d keypoints.
+    Shows all correspondences between two lists of 3d keypoints.
     Args:
         vis: a MeshCat Visualizer
         kpoints1: 3xN keypoints for image 1, columns aligned with kpoints2
@@ -284,7 +285,6 @@ function show_correspondence!(vis::Visualizer, kpoints1, kpoints2, label=string(
     end
 end
 
-# TODO(rgg): use multiple dispatch to clean this up
 function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t=zeros(3), label::String=string(uuid1()))
     """
     Args:
@@ -301,6 +301,7 @@ function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t
     K_inv = inv(K)
     u_max = size(img_color, 2)
     v_max = size(img_color, 1)
+    # TODO(rgg): clean this up with more efficient reprojection functions
     @inbounds for v in 1:v_max
         @inbounds for u in 1:u_max
             c = img_color[v, u]
@@ -324,6 +325,11 @@ function remove_invalid_matches(p1::Matrix, p2::Matrix)
     Takes in two matching 3xN matrices of 3D point correspondences. 
     Removes all matching pairs where at least one point is at the origin.
     Points at the origin are indicative of invalid depth returns.
+    Args:
+        p1: 3xN matrix of 3D points
+        p2: 3xN matrix of 3D points
+    Returns: 
+        Tuple(p1, p2): 3xM matrices of 3D points, where M <= N
     """
     n_pts = size(p1, 2)
     valid_inds = Int32[]
