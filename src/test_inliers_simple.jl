@@ -22,8 +22,9 @@ p2_noisy[:, outlier_inds] += 3*[1; 0; 0]
 # Truncated least squares sanity check rotation
 R_tls, t_tls = PE.estimate_Rt(p1, p2_noisy;
     method_pairing=PE.Star(),
-    method_R=PE.TLS(c̄ = 0.01), 
-    method_t=PE.TLS(c̄ = 0.01)
+    β = 0.005f0,
+    method_R=PE.TLS(c̄ = 1f0), 
+    method_t=PE.TLS(c̄ = 1f0)
 )
 @show PE.rotdist(R_tls, R) * 180 / π  # Should be near zero
 @show norm(t_tls - t)  # Should be near zero
