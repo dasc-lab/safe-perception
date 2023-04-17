@@ -190,7 +190,7 @@ function _estimate_R!(R, a::AF, b::AF, w=ones(F, size(a, 2))) where {F, AF <: Ab
     # get min eigenvector 
     q = eigvecs(Q)[:,1] |> real |> Quaternion{F} 
     # convert to rotation matrix
-    R = quat_to_rot(q)
+    R .= quat_to_rot(q)
 end
 
 """
@@ -350,7 +350,7 @@ function estimate_R_TLS(method, a::Matrix{V}, b::Matrix{V}, δ) where {V}
     data = (a, b)
     w = ones(V, N)
     rs = Vector{V}(undef, N)
-    R = I(3)
+    R = collect(I(3)*1f0)
     # Required initialization.
     # Without this, GNC_TLS may converge to a bad solution / throw errors
     wls_solver_R!(R, w, data)  
