@@ -4,6 +4,10 @@ using DecompUtil
 using Polyhedra
 using ColorTypes, MeshCat
 
+"""
+Simple test that grows a polyhedron within a cube of obstacle points.
+Also visualizes the polyhedron a) shrunk and b) rototranslated.
+"""
 # seed from which the decomposition starts
 pos = [0.3,0.3,0.3] 
 
@@ -30,9 +34,10 @@ delete!(vis)  # Clear any rendered objects
 
 # Construct polyhedron as intersection of half spaces
 # H = a'x ≤ a'x_0
-ϵ = 0.2  # norm ball error around points
+ϵ = 0.2  # Shrink factor; e.g. norm ball error around points
 hs = [Polyhedra.HalfSpace(r.n, r.n' * r.p) for r in result]
 hs_shrunk = [Polyhedra.HalfSpace(r.n, r.n' * r.p - ϵ) for r in result]
+
 # Test rototranslation of polyhedron
 R = RotX(0.0) * RotY(0.0) * RotZ(pi/6)
 t = [1.0, 2, 0.5]
@@ -40,6 +45,7 @@ T = get_T(R, t)
 # Transform polyhedron
 hs_T = [Polyhedra.HalfSpace(R * r.n, (R * r.n)' * (T * [r.p; 1f0])[1:3]) for r in result]
 
+# Form polyhedron objects and mesh for display
 p = polyhedron(reduce(∩, hs))
 p_shrunk = polyhedron(reduce(∩, hs_shrunk))
 p_T = polyhedron(reduce(∩, hs_T))
@@ -47,7 +53,7 @@ m = Polyhedra.Mesh(p)
 m_shrunk = Polyhedra.Mesh(p_shrunk)
 m_T = Polyhedra.Mesh(p_T)
 
-# Plot points
+# Plot points and polyhedra
 solid_green = MeshLambertMaterial(color=RGB(0, 1, 0))
 solid_red = MeshLambertMaterial(color=RGB(1, 0, 0))
 translucent_blue = MeshLambertMaterial(color=RGBA(0, 0, 1, 0.5))
