@@ -328,7 +328,7 @@ function residuals_t!(rs, t, s, β)
     rs = norm.(eachcol(s .- t)) / β
 end
 
-function estimate_R(method::LS, a, b)
+function estimate_R(method::LS, a, b, δ)
     R = _estimate_R(a, b)
     return R
 end
@@ -363,7 +363,7 @@ function estimate_R_TLS(method, a::Matrix{V}, b::Matrix{V}, δ) where {V}
     return R
 end
 
-function estimate_R(method::GM, a, b)
+function estimate_R(method::GM, a, b, δ)
     N = size(a, 2)
     data = (a, b)
     R = GNC_GM(N, data, wls_solver_R, residuals_R, method.c̄; 
@@ -375,7 +375,7 @@ function estimate_R(method::GM, a, b)
     return R
 end
 
-function estimate_t(method::LS, p1,p2,R)
+function estimate_t(method::LS, p1,p2,R, β)
     s = p2 - R*p1
     t = _estimate_t(s)
     return t
@@ -438,7 +438,7 @@ function estimate_Rt(p1::Matrix, p2; method_pairing::PairingMethod, β::Float32,
     is, js = make_pairs(method_pairing, N)
     a = p1[:, is] - p1[:, js]
     b = p2[:, is] - p2[:, js]
-    # TODO(rgg): fix methods to all take β as a parameter (necessary)
+    # Some methods do not require β or δ, but we pass it anyway for "simplicity"
     R = estimate_R(method_R, a, b, 2*β)
     t = estimate_t(method_t, p1, p2, R, β)
     return R, t

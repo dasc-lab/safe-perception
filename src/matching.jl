@@ -7,16 +7,12 @@ using ColorTypes, MeshCat
 using UUIDs
 using Logging, Printf
 
-Point3f = Point3f0  # For newer versions of GeometryBasics
+include("utils.jl")  # Includes static matrix types, rototranslation functions
+
+Point3f = Point3f0  # Required if using newer versions of GeometryBasics
 cv = pyimport("cv2")
 np = pyimport("numpy")
 py = pybuiltins
-
-SM4{F} = SMatrix{4, 4, F, 16}
-SM3{F} = SMatrix{3, 3, F, 9}
-SV2{F} = SVector{2, F}
-SV3{F} = SVector{3, F}
-SV4{F} = SVector{4, F}
 
 function get_matches(img1::Py, img2::Py, detector_type::String="orb", nfeatures=1000, use_flann=true)::Tuple{Py, Py, Py}
     """
@@ -73,13 +69,32 @@ function get_matches(img1::Py, img2::Py, detector_type::String="orb", nfeatures=
         flann = cv.FlannBasedMatcher(index_params,search_params)
         @info "Matching keypoints with FLANN"
         @time all_matches = flann.knnMatch(des1,des2,k=2)  # Get two nearest neighbors for ratio test
-        # Ratio test as per Lowe's paper
         matches = py.list()  # TODO(rgg): make this a Julia vector?
-        if pyconvert(Int, py.len(all_matches)) == 0
+        # Check if matches is empty or python None
+        matches_empty = pyeval(Bool, "all_matches is None or len(all_matches) == 0", Main, (all_matches=all_matches,))
+        if matches_empty
             @warn "No matches found"
             return kp1, kp2, matches
         end
-        for (m, n) in all_matches
+        # Print first few elements of all_matches
+        @debug "First few elements of all_matches:"
+        for i in 1:min(5, py.len(all_matches))
+            @debug all_matches[i]
+        end
+        # Print length of matches found
+        @info "Number of matches found by FLANN: " py.len(all_matches)
+        # Ratio test as per Lowe's paper.
+        # If the closest match is much closer than the second closest, it's a good match.
+        for match_pair in all_matches
+            # Print pair of matches
+            @debug match_pair
+            # Sometimes FLANN is unable to produce two matches
+            if pyconvert(Bool, py.len(match_pair) < 2)
+                continue
+            else
+                m = match_pair[0]
+                n = match_pair[1]
+            end
             if pyconvert(Bool, m.distance < 0.7*n.distance)
                 matches.append(m)
             end
@@ -290,7 +305,7 @@ function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t
     Args:
         vis: MeshCat Visualizer
         depth_map: 2D indexable e.g. Matrix{Float64}
-        img_color: 2D indexable 
+        img_color: 2D indexable Julia object (not Python)
         K: camera matrix
         R: [optional] rotation matrix to apply to every point
         t: [optional] translation to apply to every point
@@ -344,44 +359,3 @@ function remove_invalid_matches(p1::Matrix, p2::Matrix)
     return (p1[:, valid_inds], p2[:, valid_inds])
 end
 
-# Apply rototranslation to frame 1 3d keypoints
-function apply_Rt(pts::Matrix, R::SM3{Real}, t::SV3{Real})
-    """
-    Applies rototranslation to 3D points.
-    Args:
-        pts: 3xN xyz points
-        R: 3x3 rotation matrix
-        t: 3x1 translation vector
-    """
-    Rt = [R t; 0 0 0 1]  # Augmented rototranslation matrix
-    out = zeros(size(pts))
-    N = size(pts, 2)
-    pts_aug = [pts; ones(1, N)]
-    @inbounds for (i, col) in enumerate(eachcol(pts_aug))
-        out[:, i] = (Rt*col)[1:3]
-    end
-    return out
-end
-
-function apply_T(pts::Matrix, T::SM4)
-    """
-    Applies rototranslation to 3D points.
-    Args:
-        pts: 3xN xyz points
-        T: 4x4 homogeneous transformation matrix
-    """
-    N = size(pts, 2)
-    pts_aug = [pts; ones(1, N)]
-    return (T*pts_aug)[1:3, :]
-end
-
-function apply_T(pt::Vector, T::SM4)::SV3
-    """
-    Applies rototranslation to a single 3D point.
-    Args:
-        pts: 3x1 xyz point
-        T: 4x4 homogeneous transformation matrix
-    """
-    pt_aug = [pt; 1]
-    return (T*pt_aug)[1:3, :]
-end

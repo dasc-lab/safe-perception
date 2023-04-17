@@ -3,6 +3,7 @@ ENV["JULIA_CONDAPKG_BACKEND"] = "Null"
 ENV["JULIA_PYTHONCALL_EXE"] = "/usr/bin/python3"
 
 using PythonCall
+using StaticArrays
 cv = pyimport("cv2")
 
 function get_cal_params(path)
@@ -23,7 +24,7 @@ function assemble_K_matrix(fx, fy, cx, cy)
     K = [fx 0 cx;
          0 fy cy;
          0 0 1]
-    return K
+    return SMatrix{3, 3, Float32, 9}(K)
 end
 
 function get_depth(data_folder, dimg_name)::Matrix{Float32}

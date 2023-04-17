@@ -1,5 +1,9 @@
 # Helper functions for various tasks
-# TODO(rgg): reorganize to approprate modules
+SM4{F} = SMatrix{4, 4, F, 16}
+SM3{F} = SMatrix{3, 3, F, 9}
+SV2{F} = SVector{2, F}
+SV3{F} = SVector{3, F}
+SV4{F} = SVector{4, F}
 
 function find_interp_idx(arr, val)
     """
@@ -121,7 +125,7 @@ end
 
 function generate_synthetic_data(;N=1_000, β=0.01, outlier_fraction=0.5, outlier_noise=40)
     """
-    Generates synthetic data for testing pose estimation algorithms.
+    Generates synthetic point cloud data for testing pose estimation algorithms.
     Args:
         N: number of points to generate
         β: inlier noise bound
@@ -148,4 +152,46 @@ function generate_synthetic_data(;N=1_000, β=0.01, outlier_fraction=0.5, outlie
         p2_noisy[:, i] += outlier_noise*randn(3)
     end
     return p1, p2_noisy, R_groundtruth, t_groundtruth, outlier_inds
+end
+
+# Apply rototranslation to frame 1 3d keypoints
+function apply_Rt(pts::Matrix, R::SM3{Real}, t::SV3{Real})
+    """
+    Applies rototranslation to 3D points.
+    Args:
+        pts: 3xN xyz points
+        R: 3x3 rotation matrix
+        t: 3x1 translation vector
+    """
+    Rt = [R t; 0 0 0 1]  # Augmented rototranslation matrix
+    out = zeros(size(pts))
+    N = size(pts, 2)
+    pts_aug = [pts; ones(1, N)]
+    @inbounds for (i, col) in enumerate(eachcol(pts_aug))
+        out[:, i] = (Rt*col)[1:3]
+    end
+    return out
+end
+
+function apply_T(pts::Matrix, T::SM4)
+    """
+    Applies rototranslation to 3D points.
+    Args:
+        pts: 3xN xyz points
+        T: 4x4 homogeneous transformation matrix
+    """
+    N = size(pts, 2)
+    pts_aug = [pts; ones(1, N)]
+    return (T*pts_aug)[1:3, :]
+end
+
+function apply_T(pt::Vector, T::SM4)::SV3
+    """
+    Applies rototranslation to a single 3D point.
+    Args:
+        pts: 3x1 xyz point
+        T: 4x4 homogeneous transformation matrix
+    """
+    pt_aug = [pt; 1]
+    return (T*pt_aug)[1:3, :]
 end

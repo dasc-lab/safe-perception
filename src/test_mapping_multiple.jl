@@ -41,7 +41,7 @@ const cal_path = joinpath(df, "calibration.txt")
 const K = SM3{Float32}(assemble_K_matrix(get_cal_params(cal_path)...))
 
 # Whether to visualize the point clouds and polyhedra in MeshCat
-visualize = true
+visualize = false
 
 if visualize
     if !@isdefined vis
@@ -113,7 +113,7 @@ function run_test()
             # Inlier noise, related to choice of ̄c. See TEASER paper.
             # Estimate error on TLS
             @info "Estimating error bounds with max clique and sampling"
-            @time ϵR, ϵt = PE.est_err_bounds(matched_pts1, matched_pts2, β, iterations=1000)
+            @time ϵR, ϵt = PE.est_err_bounds(matched_pts1, matched_pts2, β, iterations=10000)
             @show ϵR, ϵt
             max_dist = 1f0 # maximum distance from camera to any point [m]
             @show norm_ball_err = ϵR * max_dist + ϵt
