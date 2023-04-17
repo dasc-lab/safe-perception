@@ -8,10 +8,10 @@ PE = PoseEstimation
 
 Random.seed!(42);
 # |ϵ| ≤ β; β is an upper bound on the inlier noise.
-β = 0.01
+β = 0.01f0
 # Set maximum residual of inliers
 # This number should be computed based off β
-c̄ = 0.07
+c̄ = 1
 N = 1_000  # Number of points (correspondences)
 
 p1, p2_noisy, R_groundtruth, t_groundtruth, outlier_inds = generate_synthetic_data(N=N)
@@ -19,38 +19,23 @@ p1, p2_noisy, R_groundtruth, t_groundtruth, outlier_inds = generate_synthetic_da
 # Normal least squares
 @time R_ls, t_ls = PE.estimate_Rt(p1, p2_noisy;
     method_pairing=PE.Star(),
+    β = β,
     method_R=PE.LS(),
     method_t=PE.LS())
 
 @show PE.rotdist(R_ls, R_groundtruth) * 180 / π
 @show norm(t_ls - t_groundtruth)
 
-# Truncated least squares
-@time R_tls, t_tls = PE.estimate_Rt(p1, p2_noisy;
+# Truncated least squares (in-place)
+@time R_tls, t_tls = PE.estimate_Rt_fast(p1, p2_noisy;
     method_pairing=PE.Star(),
+    β = β,
     method_R=PE.TLS(c̄=c̄), # TODO: fix c̄, put in the theoretically correct value based on β
     method_t=PE.TLS(c̄=c̄)
 )
 
 @show PE.rotdist(R_tls, R_groundtruth) * 180 / π
 @show norm(t_tls - t_groundtruth)
-
-# estimate the error bound for rotation matrices
-# this is a bound on the maximum ||R - R̂||_F
-inlier_inds = [i for i=1:N if !(i in outlier_inds)];
-est_inlier_inds = PE.get_inlier_inds(p1, p2_noisy, β, PE.Complete(N))
-@time begin
-    bb = Inf
-    bb_est_inliers = Inf
-    for i=1:1000
-        # Randomly select subset of inliers
-        global bb = min(bb, PE.ϵR(p1[:, rand(inlier_inds, 4)], β))
-        global bb_est_inliers = min(bb_est_inliers, PE.ϵR(p1[:, rand(est_inlier_inds, 4)], β))
-    end
-end
-@show bb
-@show bb_est_inliers
-@show PE.ϵt(β)
 
 @show norm(R_ls - R_groundtruth)
 @show norm(R_tls - R_groundtruth)

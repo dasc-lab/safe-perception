@@ -95,7 +95,7 @@ function run_test()
             @info "Finding correspondences"
             @time matched_pts1, matched_pts2 = get_matched_pts(curr_gray, next_gray, curr_dimg, next_dimg)
             @info "Estimating R, t with TLS"
-            @time R_tls_2_1, t_tls_2_1 = PE.estimate_Rt_TLS(matched_pts2, matched_pts1;
+            @time R_tls_2_1, t_tls_2_1 = PE.estimate_Rt_fast(matched_pts2, matched_pts1;
                 β=β,
                 method_pairing=PE.Star(),
                 method_R=PE.TLS(c̄), # TODO: fix c̄, put in the theoretically correct value based on β

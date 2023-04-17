@@ -4,13 +4,12 @@ Loads data and computes keypoints.
 """
 # Select dataset and frames as desired
 df_path = "/root/datasets/training/plant_4/"
-t1_str = "4043.278005"
-t2_str = "4043.314868"
+ind1 = 47  # Index of first frame
+ind2 = 50  # Index of second frame
 
-t1 = parse(Float64, t1_str)
-t2 = parse(Float64, t2_str)
-name1 = t1_str * ".png"
-name2 = t2_str * ".png"
+filenames = readdir(joinpath(df_path, "rgb"))
+name1 = filenames[ind1]
+name2 = filenames[ind2]
 
 rgb_path = joinpath(df_path, "rgb/")
 img1_color = get_imgs(rgb_path, name1) 

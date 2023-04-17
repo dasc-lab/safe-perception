@@ -77,6 +77,17 @@ function get_T(R, t)::SM4{Float32}
     return SM4{Float32}([R t; 0 0 0 1])
 end
 
+function convert_py_rgb_img(py_img::Py)::Array
+    """
+    Convert an OpenCV image to a Julia RGB image.
+    """
+    jl_img = pyconvert(Array{Float64}, py_img) ./ 255
+    # Python image is actually BGR (not RGB), so reverse the channels
+    reverse!(jl_img, dims=3)
+    # Create RGB objects out of the RGB values
+    return mapslices((v)->RGB(v...), jl_img, dims=3)
+end
+
 function get_matched_pts(img1::Py, img2::Py, depth1::Matrix{Float32}, depth2::Matrix{Float32})
     """
     Returns two 3xN matrices containing 3D points.

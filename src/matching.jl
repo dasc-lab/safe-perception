@@ -14,7 +14,7 @@ cv = pyimport("cv2")
 np = pyimport("numpy")
 py = pybuiltins
 
-function get_matches(img1::Py, img2::Py, detector_type::String="orb", nfeatures=1000, use_flann=true)::Tuple{Py, Py, Py}
+function get_matches(img1::Py, img2::Py, detector_type::String="orb"; nfeatures=1000, use_flann=true)::Tuple{Py, Py, Py}
     """
     Get matches between two grayscale images.
     Args:
@@ -213,21 +213,11 @@ function get_point_color(point, color_img)
     return rgb
 end
 
-function convert_py_rgb_img(py_img::Py)::Array
-    """
-    Convert an OpenCV image to a Julia RGB image.
-    """
-    jl_img = pyconvert(Array{Float64}, py_img) ./ 255
-    # Python image is actually BGR (not RGB), so reverse the channels
-    reverse!(jl_img, dims=3)
-    # Create RGB objects out of the RGB values
-    return mapslices((v)->RGB(v...), jl_img, dims=3)
-end
-
 line_material = LineBasicMaterial(color=RGB(0, 0, 1), linewidth=2.0)
 
 function show_correspondence!(vis::Visualizer, match, kpoints1, kpoints2, img1_color, img2_color, points1_3d, points2_3d)
     """
+    Shows all correspondences between two lists of 3d keypoints with colors from the image.
     Args:
         vis: a MeshCat Visualizer
         match: an opencv DMatch (through PythonCall)
@@ -241,8 +231,8 @@ function show_correspondence!(vis::Visualizer, match, kpoints1, kpoints2, img1_c
     # Extract the keypoints and adjust 0-indexing to 1-indexing
     idx1 = pyconvert(Int32, match.queryIdx)+1
     idx2 = pyconvert(Int32, match.trainIdx)+1
-    pt1 = points1_3d[idx1]
-    pt2 = points2_3d[idx2]
+    pt1 = Point3f(points1_3d[:, idx1])
+    pt2 = Point3f(points2_3d[:, idx2])
     # Check for correspondences to origin and skip
     if norm(pt1) < eps() || norm(pt2) < eps()
         return
@@ -255,8 +245,8 @@ function show_correspondence!(vis::Visualizer, match, kpoints1, kpoints2, img1_c
     m1 = MeshLambertMaterial(color=c1)
     m2 = MeshLambertMaterial(color=c2)
     # Plot points
-    setobject!(vis["pc1"][string(idx1)], Sphere(pt1, 0.001), m1)
-    setobject!(vis["pc2"][string(idx2)], Sphere(pt2, 0.001), m2)
+    setobject!(vis["pc1"][string(idx1)], Sphere(pt1, 0.001f0), m1)
+    setobject!(vis["pc2"][string(idx2)], Sphere(pt2, 0.001f0), m2)
     # Connect with line
     line_str = "corrs" * string(idx1) * "_" * string(idx2)
     setobject!(vis["lines"][line_str], Object(PointCloud(line), line_material, "Line"))
@@ -320,6 +310,7 @@ function show_pointcloud_color!(vis::Visualizer, depth_map, img_color, K, R=I, t
     @inbounds for v in 1:v_max
         @inbounds for u in 1:u_max
             c = img_color[v, u]
+            # This operation in particular can be done on an entire matrix of points for speedup
             pt3d = (R*get_point_3d(K_inv, (u, v), depth_map[v, u])) + t
             # Invalid returns will be exactly at the origin
             if norm(pt3d) > eps()

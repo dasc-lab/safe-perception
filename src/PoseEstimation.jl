@@ -345,7 +345,11 @@ function estimate_R(method::TLS, a, b, δ)
     return R
 end
 
-function estimate_R_TLS(method, a::Matrix{V}, b::Matrix{V}, δ) where {V}
+function estimate_R_fast(method::TLS, a::Matrix{V}, b::Matrix{V}, δ) where {V}
+    """
+    In-place version of estimate_R.
+    Only uses TLS (no multiple dispatch) for reduced precompilation time.
+    """
     N = size(a, 2)
     data = (a, b)
     w = ones(V, N)
@@ -393,7 +397,11 @@ function estimate_t(method::TLS, p1, p2, R, β)
     return R
 end
 
-function estimate_t_TLS(method::TLS, p1::Matrix{V}, p2::Matrix{V}, R, β) where {V}
+function estimate_t_fast(method::TLS, p1::Matrix{V}, p2::Matrix{V}, R, β) where {V}
+    """
+    In-place version of estimate_t.
+    Only uses TLS (no multiple dispatch) for reduced precompilation time.
+    """
     # Method provided for options data, not for type inference
     s = p2 - R * p1
     N = size(s, 2)
@@ -444,7 +452,10 @@ function estimate_Rt(p1::Matrix, p2; method_pairing::PairingMethod, β::Float32,
     return R, t
 end
 
-function estimate_Rt_TLS(p1::Matrix, p2::Matrix; β::Float32, method_pairing::PairingMethod, method_R::TLS, method_t::TLS)
+function estimate_Rt_fast(p1::Matrix, p2::Matrix; β::Float32, method_pairing::PairingMethod, method_R::TLS, method_t::TLS)
+    """
+    Uses in-place operations to speed up TLS methods.
+    """
     N = size(p1, 2)
     # In order to estimate rototranslation, we need Translation Invariant Measurements (TIMs) 
     # across the two frames. This allows for outlier rejection.
@@ -452,8 +463,8 @@ function estimate_Rt_TLS(p1::Matrix, p2::Matrix; β::Float32, method_pairing::Pa
     is, js = make_pairs(method_pairing, N)
     a = p1[:, is] - p1[:, js]
     b = p2[:, is] - p2[:, js]
-    R = estimate_R_TLS(method_R, a, b, 2*β)
-    t = estimate_t_TLS(method_t, p1, p2, R, β)
+    R = estimate_R_fast(method_R, a, b, 2*β)
+    t = estimate_t_fast(method_t, p1, p2, R, β)
     return R, t
 end
 
@@ -499,23 +510,12 @@ function get_inlier_inds(p1::Matrix, p2::Matrix, ϵ, method_pairing::PairingMeth
     end
     @info @sprintf("Number of edges in pruned TRIM graph: %i\n", length(edges(G)))
 
-    # For debugging only, not needed when using with max clique
-    # scale_consistent_inds = Set()
-    # for e in edges(G)
-    #     push!(scale_consistent_inds, e.src)
-    #     push!(scale_consistent_inds, e.dst)
-    # end
-    # return scale_consistent_inds
-
     # Find maximum clique in remaining graph to get inliners
-    clique = maximum_clique(G)
-
-    # Return indices of vertices (points) that belong to inlier TRIMs.
-    return clique
+    # and return indices of vertices (points) that belong to inlier TRIMs.
+    return maximum_clique(G)
 end
 
 σmin(A) = sqrt(max(0, eigmin(A'*A)))
-
 
 # note, this function scales as N^4
 # only pass in inliers to p1, i.e. pass in p1[:, inliner_idx]
@@ -544,7 +544,7 @@ function ϵt(β)
     return (9 + 3*sqrt(3))*β
 end
 
-function est_err_bounds(p1, p2, β; iterations=1000)
+function est_err_bounds(p1, p2, β; iterations=5000)
     """
     Estimate error bounds on R, t for the given set of correspondences.
     Uses scale consistency and max-clique to predict inliers.
@@ -563,7 +563,5 @@ function est_err_bounds(p1, p2, β; iterations=1000)
     end
     return best_ϵR, ϵt(β)
 end
-
-
 
 end
