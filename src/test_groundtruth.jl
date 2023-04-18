@@ -1,7 +1,7 @@
 include("PoseEstimation.jl")
 include("ingest.jl")
 include("matching.jl")
-include("test_utils.jl")
+include("utils.jl")
 using .PoseEstimation
 using BenchmarkTools, Random, Rotations, Interpolations, DelimitedFiles
 using PythonCall
@@ -15,6 +15,7 @@ rototranslation.
 df = joinpath("/root/datasets/training/plant_4/")
 
 # Read in images
+# Loading all images at once only recommended for small datasets
 ground_truth = readdlm(joinpath(df, "groundtruth.txt"), skipstart=1);
 depth_filenames = readdlm(joinpath(df, "depth.txt"));
 depth_ts = depth_filenames[:,1]
@@ -42,5 +43,6 @@ delete!(vis)  # Clear any rendered objects
 N = length(imgs_color)
 for i in 4:3:N-3
     R, t = get_groundtruth_Rt(gtruth, depth_ts[i])
-    show_pointcloud_color!(vis, dimgs[i], imgs_color[i], K, R, t)
+    img_color_jl = convert_py_rgb_img(imgs_color[i])
+    show_pointcloud_color!(vis, dimgs[i], img_color_jl, K, R, t)
 end

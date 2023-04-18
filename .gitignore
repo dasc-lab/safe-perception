@@ -26,3 +26,5 @@ docs/site/
 *training/
 *test/
 *out/
+*.jpg
+*.svg
