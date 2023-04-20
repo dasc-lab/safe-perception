@@ -55,13 +55,13 @@ end
 # Compute R, t using TLS
 c̄ = 1f0  # Maximum residual of inliers
 β = 0.005f0  # Bound on inlier noise
-@time R_tls_1_2, t_tls_1_2 = PE.estimate_Rt_TLS(matched_pts1, matched_pts2;
+@time R_tls_1_2, t_tls_1_2 = PE.estimate_Rt_fast(matched_pts1, matched_pts2;
     method_pairing=PE.Star(),
     β = β,
     method_R=PE.TLS(c̄), # TODO: fix c̄, put in the theoretically correct value based on β
     method_t=PE.TLS(c̄)
 )
-@time R_tls_2_1, t_tls_2_1 = PE.estimate_Rt_TLS(matched_pts2, matched_pts1;
+@time R_tls_2_1, t_tls_2_1 = PE.estimate_Rt_fast(matched_pts2, matched_pts1;
     method_pairing=PE.Star(),
     β = β,
     method_R=PE.TLS(c̄), # TODO: fix c̄, put in the theoretically correct value based on β

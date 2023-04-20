@@ -7,9 +7,16 @@ df_path = "/root/datasets/training/plant_4/"
 ind1 = 47  # Index of first frame
 ind2 = 50  # Index of second frame
 
+function name_to_timestamp(name)
+    parts = split(name, '.')
+    t_str = parts[1] * "." * parts[2]
+    return parse(Float64, t_str)
+end
 filenames = readdir(joinpath(df_path, "rgb"))
 name1 = filenames[ind1]
 name2 = filenames[ind2]
+t1 = name_to_timestamp(name1)
+t2 = name_to_timestamp(name2)
 
 rgb_path = joinpath(df_path, "rgb/")
 img1_color = get_imgs(rgb_path, name1) 
