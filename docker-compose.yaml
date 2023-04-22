@@ -1,7 +1,7 @@
 version: "3"
 
 services:
-  cv:
+  cv-new:
     build: .
     volumes:
       - ./src:/root/src
