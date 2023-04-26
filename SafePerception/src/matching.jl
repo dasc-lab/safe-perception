@@ -1,7 +1,3 @@
-# Make sure we use the system-installed Python backend
-ENV["JULIA_CONDAPKG_BACKEND"] = "Null"
-ENV["JULIA_PYTHONCALL_EXE"] = "/usr/bin/python3"
-
 using PythonCall, GeometryBasics, LinearAlgebra, StaticArrays
 using ColorTypes, MeshCat
 using UUIDs

@@ -1,3 +1,6 @@
+using Rotations
+using StaticArrays
+
 # Helper functions for various tasks
 SM4{F} = SMatrix{4, 4, F, 16}
 SM3{F} = SMatrix{3, 3, F, 9}

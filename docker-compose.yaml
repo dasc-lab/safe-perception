@@ -1,10 +1,10 @@
 version: "3"
 
 services:
-  cv-new:
+  cv:
     build: .
     volumes:
-      - ./src:/root/src
+      - ./SafePerception:/root/SafePerception
       - ./datasets:/root/datasets
       - /tmp/.X11-unix:/tmp/.X11-unix
     environment:

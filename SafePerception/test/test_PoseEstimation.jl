@@ -1,6 +1,7 @@
-include("PoseEstimation.jl")
-include("utils.jl")
-using .PoseEstimation
+# include("PoseEstimation.jl")
+# include("utils.jl")
+using SafePerception
+using SafePerception.PoseEstimation
 using BenchmarkTools, Random, Rotations
 using LinearAlgebra  # norm
 using Printf

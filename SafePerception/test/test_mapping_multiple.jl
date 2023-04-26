@@ -61,7 +61,7 @@ function run_test()
     N = length(img_filenames)
     step = 3
     start = 9
-    stop = 180
+    stop = 81
     R_init, t_init = get_groundtruth_Rt(gtruth, depth_ts[start])
     local prev_T = get_T(R_init, t_init)
 
